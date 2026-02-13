@@ -1,0 +1,205 @@
+import type { Vessel } from "../../types/maritime/marine";
+
+export const MOCK_VESSELS: Vessel[] = [
+  {
+    vesselId: "v1",
+    vesselName: "MV Atlas",
+    owner: "Vard Marine",
+    vesselTypeId: "type_psv",
+    vesselCategoryId: "cat_support",
+    statusId: "Active",
+    voyages: [],
+    particulars: {
+      loa: 85,
+      lwl: 82,
+      breadthMoulded: 18,
+      depthMainDeck: 7,
+      designDraft: 5.5,
+    },
+    capacities: {
+      fuelOil: 800,
+      potableWater: 500,
+      drillWater: 1200,
+      liquidMud: 600,
+      dryBulkMud: 400,
+      deadWeight: 4500,
+      deckArea: 900,
+      deckLoading: 5,
+      totalComplement: 50,
+    },
+    performance: {
+      serviceSpeed: 12,
+      maxSpeed: 14.5,
+    },
+    financials: {
+      hourlyOperatingCost: 500,
+      fuelConsumptionRate: 100,
+      mobilisationCost: 5000,
+    },
+  },
+  {
+    vesselId: "v2",
+    vesselName: "MV Horizon",
+    owner: "Seacor",
+    vesselTypeId: "type_ahts",
+    vesselCategoryId: "cat_support",
+    statusId: "Maintenance",
+    voyages: [],
+    particulars: {
+      loa: 75,
+      lwl: 72,
+      breadthMoulded: 16,
+      depthMainDeck: 6.5,
+      designDraft: 5,
+    },
+    performance: {
+      serviceSpeed: 11,
+      maxSpeed: 13,
+    },
+    financials: {
+      hourlyOperatingCost: 800,
+      fuelConsumptionRate: 150,
+      mobilisationCost: 7500,
+    },
+  },
+  {
+    vesselId: "v3",
+    vesselName: "MV Enterprise",
+    owner: "Maersk",
+    vesselTypeId: "type_drillship",
+    vesselCategoryId: "cat_drilling",
+    statusId: "Active",
+    voyages: [],
+    particulars: {
+      loa: 230,
+      lwl: 220,
+      breadthMoulded: 42,
+      depthMainDeck: 19,
+      designDraft: 12,
+    },
+    capacities: {
+      fuelOil: 4500,
+      potableWater: 1200,
+      drillWater: 2500,
+      liquidMud: 1800,
+      dryBulkMud: 900,
+      deadWeight: 60000,
+      deckArea: 2500,
+      deckLoading: 15,
+      totalComplement: 120,
+    },
+    performance: {
+      serviceSpeed: 10,
+      maxSpeed: 12,
+    },
+    financials: {
+      hourlyOperatingCost: 1200,
+      fuelConsumptionRate: 200,
+      mobilisationCost: 12000,
+    },
+  },
+  {
+    vesselId: "v4",
+    vesselName: "MV Voyager",
+    owner: "Seadrill",
+    vesselTypeId: "type_semisub",
+    vesselCategoryId: "cat_drilling",
+    statusId: "Inactive",
+    voyages: [],
+    particulars: {
+      loa: 110,
+      lwl: 95,
+      breadthMoulded: 75,
+      depthMainDeck: 35,
+      designDraft: 22,
+    },
+    performance: {
+      serviceSpeed: 6,
+      maxSpeed: 8,
+    },
+    financials: {
+      hourlyOperatingCost: 1500,
+      fuelConsumptionRate: 250,
+      mobilisationCost: 15000,
+    },
+  },
+  {
+    vesselId: "v5",
+    vesselName: "MV Discovery",
+    owner: "TechnipFMC",
+    vesselTypeId: "type_msv",
+    vesselCategoryId: "cat_support",
+    statusId: "Active",
+    voyages: [],
+    particulars: {
+      loa: 130,
+      lwl: 122,
+      breadthMoulded: 24,
+      depthMainDeck: 11,
+      designDraft: 7.5,
+    },
+    capacities: {
+      fuelOil: 1500,
+      potableWater: 800,
+      drillWater: 0,
+      liquidMud: 0,
+      dryBulkMud: 0,
+      deadWeight: 8000,
+      deckArea: 1200,
+      deckLoading: 10,
+      totalComplement: 60,
+    },
+    performance: {
+      serviceSpeed: 13,
+      maxSpeed: 15,
+    },
+    financials: {
+      hourlyOperatingCost: 900,
+      fuelConsumptionRate: 180,
+      mobilisationCost: 8000,
+    },
+  },
+];
+
+export const VESSEL_CATEGORIES = [
+  {
+    categoryId: "cat_drilling",
+    category: "Offshore Drilling & Exploration Vessel",
+    types: [
+      { categoryTypeId: "type_drillship", categoryType: "Drillship" },
+      { categoryTypeId: "type_jackup", categoryType: "Jack-up Rig" },
+      { categoryTypeId: "type_semisub", categoryType: "Semi-submersible" },
+    ],
+  },
+  {
+    categoryId: "cat_support",
+    category: "Offshore Support Vessels",
+    types: [
+      {
+        categoryTypeId: "type_psv",
+        categoryType: "PSV (Platform Supply Vessel)",
+      },
+      {
+        categoryTypeId: "type_ahts",
+        categoryType: "AHTS (Anchor Handling Tug Supply)",
+      },
+      {
+        categoryTypeId: "type_msv",
+        categoryType: "MSV (Multipurpose Support Vessel)",
+      },
+      {
+        categoryTypeId: "type_fsv",
+        categoryType: "Fast Supply Intervention",
+      },
+    ],
+  },
+  {
+    categoryId: "cat_tankers",
+    category: "Transport Tankers",
+    types: [
+      { categoryTypeId: "type_oil", categoryType: "Oil Tanker" },
+      { categoryTypeId: "type_lng", categoryType: "LNG Carrier" },
+      { categoryTypeId: "type_chem", categoryType: "Chemical Tanker" },
+    ],
+  },
+];

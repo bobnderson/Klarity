@@ -1,0 +1,72 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@400;600;800&display=swap");
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root,
+.dark-mode {
+  --bg: #0b1220;
+  --panel: #020617;
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, 0.15);
+  --border: #1f2937;
+  --text: #e5e7eb;
+  --text-secondary: #9ca3af;
+  --muted: #9ca3af;
+  --success: #22c55e;
+  --warning: #f97316;
+  --danger: #f87171;
+  --radius: 6px;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.light-mode {
+  --bg: #f3f4f6;
+  --panel: #ffffff;
+  --accent: #0284c7;
+  --accent-soft: rgba(2, 132, 199, 0.15);
+  --border: #d1d5db;
+  --text: #1f2937;
+  --text-secondary: #6b7280;
+  --muted: #6b7280;
+  --success: #16a34a;
+  --warning: #ea580c;
+  --danger: #dc2626;
+  --radius: 6px;
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family:
+    "Inter",
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background-color: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}

@@ -1,0 +1,1055 @@
+import { useState, useEffect, useMemo } from "react";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import dayjs from "dayjs";
+import { CONSIGNMENT_TYPES } from "../../data/maritime/logisticsData";
+import {
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  CircularProgress,
+  Collapse,
+  Box,
+  Typography,
+  IconButton,
+  List,
+  ListItem,
+  ListItemText,
+  Chip,
+  Tooltip,
+} from "@mui/material";
+import {
+  X,
+  FileText,
+  Trash2,
+  Plus,
+  Download,
+  Scale,
+  Square,
+  MapPin,
+  ShieldAlert,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import type { Voyage, Vessel } from "../../types/maritime/marine";
+import type { MovementRequest } from "../../types/maritime/logistics";
+import { marineMovementService } from "../../services/maritime/marineMovementService";
+import {
+  getVoyageManifest,
+  assignItemsToVoyage,
+  unassignItemsFromVoyage,
+} from "../../services/maritime/voyageService";
+import { toast } from "react-toastify";
+import { formatNumber } from "../../utils/formatters";
+
+interface VoyageManifestDialogProps {
+  open: boolean;
+  onClose: () => void;
+  voyage: Voyage | undefined;
+  vessel: Vessel | undefined;
+  onUpdate?: () => void;
+}
+
+export function VoyageManifestDialog({
+  open,
+  onClose,
+  voyage,
+  vessel,
+  onUpdate,
+}: VoyageManifestDialogProps) {
+  const [assignedRequests, setAssignedRequests] = useState<MovementRequest[]>(
+    [],
+  );
+  const [availableRequests, setAvailableRequests] = useState<MovementRequest[]>(
+    [],
+  );
+  const [isAddingMode, setIsAddingMode] = useState(false);
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(
+    null,
+  );
+  const [processingItemId, setProcessingItemId] = useState<string | null>(null);
+  const [expandedRequestIds, setExpandedRequestIds] = useState<Set<string>>(
+    new Set(),
+  );
+
+  useEffect(() => {
+    if (open && voyage) {
+      loadManifestData();
+    }
+  }, [open, voyage]);
+
+  const loadManifestData = async () => {
+    if (!voyage) return;
+    try {
+      const assigned = await getVoyageManifest(voyage.voyageId);
+      setAssignedRequests(assigned);
+    } catch (error) {
+      console.error("Failed to load manifest data:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (isAddingMode && voyage) {
+      loadAvailableRequests();
+      setExpandedRequestIds(new Set());
+    }
+  }, [isAddingMode, voyage]);
+
+  const loadAvailableRequests = async () => {
+    if (!voyage) return;
+    try {
+      const available = await marineMovementService.getPendingMovementRequests({
+        originId: voyage.originId,
+        destinationId: voyage.destinationId,
+      });
+      setAvailableRequests(available);
+    } catch (error) {
+      console.error("Failed to load available requests:", error);
+    }
+  };
+
+  // The following section appears to be markdown content intended for a different file (e.g., walkthrough.md).
+  // Inserting it directly into this JavaScript/TypeScript file would cause syntax errors.
+  // As per instructions to ensure the resulting file is syntactically correct, this content cannot be added here.
+  // If this content was meant for a different file, please provide that file for editing.
+  // If it was intended to be a comment, please specify.
+  const handleRemoveRequest = async (requestId: string) => {
+    try {
+      setProcessingRequestId(requestId);
+      // Unassign all items in this request from the current voyage
+      const request = assignedRequests.find((r) => r.requestId === requestId);
+      if (request && voyage) {
+        const itemIds = request.items.map((i) => i.itemId);
+        await unassignItemsFromVoyage(voyage.voyageId, itemIds);
+      }
+      toast.info("Request removed from manifest");
+      loadManifestData();
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      toast.error("Failed to remove request");
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
+
+  const handleDeleteItem = async (requestId: string, itemId: string) => {
+    try {
+      setProcessingItemId(itemId);
+      const request = assignedRequests.find((r) => r.requestId === requestId);
+      if (!request) return;
+
+      if (voyage) {
+        await unassignItemsFromVoyage(voyage.voyageId, [itemId]);
+      }
+      toast.info("Item removed from manifest");
+      loadManifestData();
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      toast.error("Failed to remove item from manifest");
+    } finally {
+      setProcessingItemId(null);
+    }
+  };
+
+  const handleAddRequest = async (requestId: string) => {
+    if (!voyage) return;
+    try {
+      const request = availableRequests.find((r) => r.requestId === requestId);
+      if (request) {
+        // Assign ALL unassigned items to this voyage
+        const itemIds = request.items
+          .filter((i) => !i.assignedVoyageId)
+          .map((i) => i.itemId);
+
+        await assignItemsToVoyage(voyage.voyageId, itemIds);
+      }
+      toast.success("Request added to manifest");
+      setIsAddingMode(false);
+      loadManifestData();
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      toast.error("Failed to add request");
+    }
+  };
+
+  const handleAddItem = async (itemId: string) => {
+    if (!voyage) return;
+    try {
+      setProcessingItemId(itemId);
+      await assignItemsToVoyage(voyage.voyageId, [itemId]);
+      toast.success("Item added to manifest");
+
+      // Refresh data
+      loadManifestData();
+      if (isAddingMode) loadAvailableRequests();
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      toast.error("Failed to add item");
+    } finally {
+      setProcessingItemId(null);
+    }
+  };
+
+  const toggleRequestExpansion = (requestId: string) => {
+    const newExpanded = new Set(expandedRequestIds);
+    if (newExpanded.has(requestId)) {
+      newExpanded.delete(requestId);
+    } else {
+      newExpanded.add(requestId);
+    }
+    setExpandedRequestIds(newExpanded);
+  };
+
+  const handleGeneratePDF = () => {
+    if (!voyage || !vessel) return;
+
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Title
+    doc.setFontSize(18);
+    doc.setTextColor(40);
+    doc.text("VOYAGE MANIFEST", pageWidth / 2, 15, { align: "center" });
+
+    // Header Info
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Voyage ID: ${voyage.voyageId.toUpperCase()}`, 14, 25);
+    doc.text(
+      `Generated: ${dayjs().format("DD MMM YYYY HH:mm")}`,
+      pageWidth - 14,
+      25,
+      { align: "right" },
+    );
+
+    // Vessel & Route Details
+    doc.setDrawColor(200);
+    doc.line(14, 28, pageWidth - 14, 28);
+
+    doc.setFontSize(11);
+    doc.setTextColor(0);
+    doc.text("VESSEL DETAILS", 14, 35);
+    doc.setFontSize(9);
+    doc.text(`Name: ${vessel.vesselName}`, 14, 40);
+    doc.text(`Type: ${vessel.vesselTypeId || "N/A"}`, 14, 45);
+    doc.text(`Owner: ${vessel.owner || "N/A"}`, 14, 50);
+
+    doc.setFontSize(11);
+    doc.text("VOYAGE DETAILS", 100, 35);
+    doc.setFontSize(9);
+    doc.text(
+      `Route: ${voyage.originName || voyage.originId} to ${voyage.destinationName || voyage.destinationId}`,
+      100,
+      40,
+    );
+    doc.text(
+      `Departure: ${dayjs(voyage.departureDateTime).format("DD MMM YYYY HH:mm")}`,
+      100,
+      45,
+    );
+    doc.text(`ETA: ${dayjs(voyage.eta).format("DD MMM YYYY HH:mm")}`, 100, 50);
+
+    // Summary Metrics
+    doc.setFontSize(11);
+    doc.text("UTILIZATION", 160, 35);
+    doc.setFontSize(9);
+    doc.text(`Weight: ${voyage.weightUtil}%`, 160, 40);
+    doc.text(`Deck: ${voyage.deckUtil}%`, 160, 45);
+    doc.text(`Cabin: ${voyage.cabinUtil}%`, 160, 50);
+
+    // Table of Items
+    const tableData = assignedRequests.flatMap((req) =>
+      req.items.map((item) => {
+        const consignment = CONSIGNMENT_TYPES.find(
+          (c) => (c as any).categoryId === item.categoryId,
+        );
+        const itemTypeLabel = item.itemTypeName || item.itemTypeId;
+
+        return [
+          req.requestId.substring(0, 8).toUpperCase(),
+          (consignment as any)?.categoryName || item.categoryId,
+          itemTypeLabel,
+          item.quantity,
+          item.dimensions || "-",
+          item.weight ? `${item.weight} t` : "-",
+          req.urgency || "Routine",
+        ];
+      }),
+    );
+
+    autoTable(doc, {
+      startY: 60,
+      head: [
+        [
+          "REQ ID",
+          "CONS. TYPE",
+          "ITEM TYPE",
+          "QTY",
+          "DIMENSIONS",
+          "WEIGHT",
+          "URGENCY",
+        ],
+      ],
+      body: tableData,
+      theme: "striped",
+      headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+      styles: { fontSize: 8, cellPadding: 2 },
+      margin: { top: 60 },
+    });
+
+    // Footer
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(
+        `Page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 10,
+        { align: "center" },
+      );
+    }
+
+    doc.save(
+      `Manifest_${vessel.vesselName}_${voyage.voyageId.substring(0, 6)}.pdf`,
+    );
+    toast.success("Manifest PDF generated successfully");
+  };
+
+  const parseArea = (dimensions: string | undefined, qty: number): number => {
+    if (!dimensions || dimensions === "0 x 0 x 0") return 0;
+    const parts = dimensions
+      .toLowerCase()
+      .split("x")
+      .map((p) => parseFloat(p.trim()));
+    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return parts[0] * parts[1] * qty;
+    }
+    return 0;
+  };
+
+  const manifestStats = useMemo(() => {
+    let totalWeight = 0;
+    let totalArea = 0;
+
+    assignedRequests.forEach((req) => {
+      req.items.forEach((item) => {
+        totalWeight += item.weight || 0;
+        totalArea += parseArea(item.dimensions, item.quantity);
+      });
+    });
+
+    return { totalWeight, totalArea };
+  }, [assignedRequests]);
+
+  if (!voyage) return null;
+
+  const vesselCap = vessel?.capacities || { deadWeight: 0, deckArea: 0 };
+  const remainingWeight = Math.max(
+    0,
+    (vesselCap.deadWeight || 0) - manifestStats.totalWeight,
+  );
+  const remainingArea = Math.max(
+    0,
+    (vesselCap.deckArea || 0) - manifestStats.totalArea,
+  );
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      PaperProps={{
+        sx: {
+          bgcolor: "var(--panel)",
+          backgroundImage: "none",
+          border: "1px solid var(--border)",
+          backdropFilter: "blur(12px)",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          pb: 1,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <FileText size={20} color="var(--accent)" />
+          <Typography variant="h6">Voyage Manifest</Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              ml: 2,
+              bgcolor: "var(--accent-soft)",
+              color: "var(--accent)",
+              px: 1,
+              py: 0.25,
+              borderRadius: 1,
+            }}
+          >
+            {voyage.voyageId}
+          </Typography>
+        </Box>
+        <Box>
+          <Tooltip title="Generate PDF Manifest">
+            <IconButton
+              onClick={handleGeneratePDF}
+              sx={{ mr: 1, color: "var(--text)" }}
+            >
+              <Download size={18} />
+            </IconButton>
+          </Tooltip>
+          <IconButton
+            onClick={onClose}
+            size="small"
+            sx={{ color: "var(--muted)" }}
+          >
+            <X size={20} />
+          </IconButton>
+        </Box>
+      </DialogTitle>
+
+      <DialogContent
+        dividers
+        sx={{
+          borderTop: "1px solid var(--border)",
+          borderBottom: "1px solid var(--border)",
+          p: 0,
+        }}
+      >
+        {/* Condensed Header & Capacity Rows */}
+        <Box
+          sx={{
+            p: 2,
+            bgcolor: "var(--bg-soft)",
+            borderBottom: "1px solid var(--border)",
+          }}
+        >
+          {/* Row 1: Basic Info */}
+          <Box sx={{ display: "flex", gap: 4, mb: 1.5, alignItems: "center" }}>
+            <Box>
+              <Typography
+                variant="caption"
+                color="var(--muted)"
+                display="block"
+              >
+                VESSEL
+              </Typography>
+              <Typography variant="body2" fontWeight={700}>
+                {voyage.vesselName}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography
+                variant="caption"
+                color="var(--muted)"
+                display="block"
+              >
+                ROUTE
+              </Typography>
+              <Typography variant="body2" fontWeight={700}>
+                {voyage.originName || voyage.originId} →{" "}
+                {voyage.destinationName || voyage.destinationId}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography
+                variant="caption"
+                color="var(--muted)"
+                display="block"
+              >
+                DEPARTURE
+              </Typography>
+              <Typography variant="body2">
+                {new Date(voyage.departureDateTime).toLocaleString()}
+              </Typography>
+            </Box>
+            <Box>
+              <Typography
+                variant="caption"
+                color="var(--muted)"
+                display="block"
+              >
+                EST. ARRIVAL
+              </Typography>
+              <Typography variant="body2">
+                {new Date(voyage.eta).toLocaleString()}
+              </Typography>
+            </Box>
+          </Box>
+
+          {voyage.stops && voyage.stops.length > 0 && (
+            <Box sx={{ mb: 1.5 }}>
+              <Typography
+                variant="caption"
+                color="var(--muted)"
+                display="block"
+                sx={{ mb: 0.5 }}
+              >
+                STOPS
+              </Typography>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                {voyage.stops.map((stop, index) => (
+                  <Box
+                    key={index}
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 0.5,
+                      bgcolor: "rgba(255,255,255,0.05)",
+                      px: 1,
+                      py: 0.5,
+                      borderRadius: 1,
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <MapPin size={12} color="var(--accent)" />
+                    <Typography variant="caption" fontWeight={600}>
+                      {stop.locationId}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      color="var(--muted)"
+                      sx={{ fontSize: 10, ml: 0.5 }}
+                    >
+                      ({dayjs(stop.arrivalDateTime).format("DD MMM HH:mm")})
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          )}
+
+          <Divider sx={{ my: 1.5, opacity: 0.1 }} />
+
+          {/* Row 2: Capacity & Utilization */}
+          <Box sx={{ display: "flex", gap: 3, alignItems: "center" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Scale size={16} color="var(--accent)" />
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="var(--muted)"
+                  display="block"
+                >
+                  DEADWEIGHT (T)
+                </Typography>
+                <Typography variant="body2">
+                  <span style={{ fontWeight: 700 }}>
+                    {formatNumber(manifestStats.totalWeight, 1)}
+                  </span>
+                  <span style={{ color: "var(--muted)", margin: "0 4px" }}>
+                    /
+                  </span>
+                  <span>{formatNumber(vesselCap.deadWeight)}</span>
+                  <Typography
+                    component="span"
+                    variant="caption"
+                    sx={{
+                      ml: 1,
+                      color:
+                        remainingWeight < 10 ? "error.main" : "success.main",
+                      fontWeight: 600,
+                    }}
+                  >
+                    ({formatNumber(remainingWeight, 1)} left)
+                  </Typography>
+                </Typography>
+              </Box>
+            </Box>
+
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Square size={16} color="var(--accent)" />
+              <Box>
+                <Typography
+                  variant="caption"
+                  color="var(--muted)"
+                  display="block"
+                >
+                  DECK AREA (M²)
+                </Typography>
+                <Typography variant="body2">
+                  <span style={{ fontWeight: 700 }}>
+                    {formatNumber(manifestStats.totalArea, 1)}
+                  </span>
+                  <span style={{ color: "var(--muted)", margin: "0 4px" }}>
+                    /
+                  </span>
+                  <span>{formatNumber(vesselCap.deckArea)}</span>
+                  <Typography
+                    component="span"
+                    variant="caption"
+                    sx={{
+                      ml: 1,
+                      color: remainingArea < 20 ? "error.main" : "success.main",
+                      fontWeight: 600,
+                    }}
+                  >
+                    ({formatNumber(remainingArea, 1)} left)
+                  </Typography>
+                </Typography>
+              </Box>
+            </Box>
+
+            <Box sx={{ ml: "auto", display: "flex", gap: 1 }}>
+              <Chip
+                label={`Weight: ${formatNumber(voyage.weightUtil, 1)}%`}
+                size="small"
+                color={voyage.weightUtil > 85 ? "error" : "primary"}
+                sx={{ height: 20, fontSize: 10 }}
+              />
+              <Chip
+                label={`Deck: ${formatNumber(voyage.deckUtil, 1)}%`}
+                size="small"
+                color={voyage.deckUtil > 85 ? "error" : "primary"}
+                sx={{ height: 20, fontSize: 10 }}
+              />
+            </Box>
+          </Box>
+        </Box>
+
+        <Box sx={{ p: 2 }}>
+          {isAddingMode ? (
+            <Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 2,
+                }}
+              >
+                <Typography variant="subtitle2">
+                  Available Approved Requests
+                </Typography>
+                <Button size="small" onClick={() => setIsAddingMode(false)}>
+                  Cancel
+                </Button>
+              </Box>
+              {availableRequests.length === 0 ? (
+                <Typography
+                  variant="body2"
+                  sx={{ textAlign: "center", py: 4, color: "var(--muted)" }}
+                >
+                  No additional approved requests found for this route.
+                </Typography>
+              ) : (
+                <List sx={{ pt: 0 }}>
+                  {availableRequests.map((req) => (
+                    <ListItem
+                      key={req.requestId}
+                      sx={{
+                        mb: 1,
+                        bgcolor: "rgba(255,255,255,0.02)",
+                        borderRadius: 1,
+                        border: "1px solid var(--border)",
+                        flexDirection: "column",
+                        alignItems: "stretch",
+                        p: 0,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          p: 1,
+                          pl: 2,
+                          cursor: "pointer",
+                          "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
+                        }}
+                        onClick={() => toggleRequestExpansion(req.requestId)}
+                      >
+                        <ListItemText
+                          primary={
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 1,
+                              }}
+                            >
+                              <Typography variant="body2" fontWeight={600}>
+                                {req.requestId}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="var(--muted)"
+                              >
+                                - {req.requestedBy}
+                              </Typography>
+                              {expandedRequestIds.has(req.requestId) ? (
+                                <ChevronUp size={14} color="var(--muted)" />
+                              ) : (
+                                <ChevronDown size={14} color="var(--muted)" />
+                              )}
+                            </Box>
+                          }
+                          secondary={`${req.items.filter((i) => !i.assignedVoyageId).length} available items · Total Weight: ${req.items
+                            .filter((i) => !i.assignedVoyageId)
+                            .reduce((sum, i) => sum + (i.weight || 0), 0)
+                            .toFixed(1)}t`}
+                        />
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          startIcon={<Plus size={14} />}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddRequest(req.requestId);
+                          }}
+                        >
+                          Add All
+                        </Button>
+                      </Box>
+
+                      <Collapse
+                        in={expandedRequestIds.has(req.requestId)}
+                        timeout="auto"
+                        unmountOnExit
+                      >
+                        <Box
+                          sx={{
+                            p: 1,
+                            pt: 0,
+                            bgcolor: "rgba(0,0,0,0.1)",
+                            borderTop: "1px solid var(--border)",
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              px: 1,
+                              py: 0.5,
+                              color: "var(--muted)",
+                              fontWeight: 600,
+                              display: "block",
+                            }}
+                          >
+                            AVAILABLE ITEMS
+                          </Typography>
+                          {req.items
+                            .filter((i) => !i.assignedVoyageId)
+                            .map((item) => (
+                              <Box
+                                key={item.itemId}
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                  p: 1,
+                                  bgcolor: "rgba(255,255,255,0.02)",
+                                  mb: 0.5,
+                                  borderRadius: 1,
+                                }}
+                              >
+                                <Box>
+                                  {item.itemTypeName || item.description}
+                                  <Typography
+                                    variant="caption"
+                                    color="var(--muted)"
+                                  >
+                                    {formatNumber(item.quantity)}{" "}
+                                    {item.unitOfMeasurement} ·{" "}
+                                    {item.weight
+                                      ? `${formatNumber(item.weight, 1)}t`
+                                      : "-"}
+                                  </Typography>
+                                </Box>
+                                <Button
+                                  size="small"
+                                  variant="text"
+                                  startIcon={
+                                    processingItemId === item.itemId ? (
+                                      <CircularProgress
+                                        size={14}
+                                        color="inherit"
+                                      />
+                                    ) : (
+                                      <Plus size={14} />
+                                    )
+                                  }
+                                  disabled={
+                                    !!processingItemId || !!processingRequestId
+                                  }
+                                  onClick={() => handleAddItem(item.itemId)}
+                                >
+                                  Add
+                                </Button>
+                              </Box>
+                            ))}
+                        </Box>
+                      </Collapse>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Box>
+          ) : (
+            <Box>
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 2,
+                }}
+              >
+                <Typography variant="subtitle2">Manifest Items</Typography>
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<Plus size={14} />}
+                  onClick={() => setIsAddingMode(true)}
+                  sx={{ bgcolor: "var(--accent)" }}
+                >
+                  Add Request
+                </Button>
+              </Box>
+
+              {assignedRequests.length === 0 ? (
+                <Typography
+                  variant="body2"
+                  sx={{ textAlign: "center", py: 4, color: "var(--muted)" }}
+                >
+                  No items assigned to this manifest yet.
+                </Typography>
+              ) : (
+                assignedRequests.map((req) => (
+                  <Box
+                    key={req.requestId}
+                    sx={{
+                      mb: 2,
+                      borderRadius: 1,
+                      border: "1px solid var(--border)",
+                      bgcolor: "rgba(255,255,255,0.01)",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        px: 1.5,
+                        py: 1,
+                        bgcolor: "rgba(255,255,255,0.02)",
+                        borderBottom: "1px solid var(--border)",
+                      }}
+                    >
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                      >
+                        <Typography
+                          variant="body2"
+                          fontWeight={700}
+                          color="var(--accent)"
+                        >
+                          {req.requestId}
+                        </Typography>
+                        <Chip
+                          label={req.requestedBy}
+                          size="small"
+                          sx={{ height: 18, fontSize: 9, opacity: 0.8 }}
+                        />
+                        <Typography variant="caption" color="var(--muted)">
+                          {req.items.length} items ·{" "}
+                          {formatNumber(
+                            req.items.reduce(
+                              (sum, i) => sum + (i.weight || 0),
+                              0,
+                            ),
+                            1,
+                          )}
+                          t
+                        </Typography>
+                        {req.isHazardous && (
+                          <Chip
+                            icon={<ShieldAlert size={12} />}
+                            label="HAZARDOUS"
+                            size="small"
+                            color="error"
+                            variant="outlined"
+                            sx={{ height: 18, fontSize: 9, fontWeight: 700 }}
+                          />
+                        )}
+                      </Box>
+                      <Tooltip title="Remove Entire Request">
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => handleRemoveRequest(req.requestId)}
+                          disabled={!!processingRequestId || !!processingItemId}
+                        >
+                          {processingRequestId === req.requestId ? (
+                            <CircularProgress size={14} color="inherit" />
+                          ) : (
+                            <Trash2 size={14} />
+                          )}
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+
+                    <Box sx={{ p: 0 }}>
+                      {/* Table Header for Items */}
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "2fr 1fr 1.5fr 1fr 40px",
+                          gap: 1,
+                          px: 1.5,
+                          py: 0.5,
+                          borderBottom: "1px solid var(--border)",
+                          bgcolor: "rgba(0,0,0,0.1)",
+                        }}
+                      >
+                        <Typography
+                          sx={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            color: "var(--muted)",
+                          }}
+                        >
+                          DESCRIPTION
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            color: "var(--muted)",
+                          }}
+                        >
+                          QTY / UNIT
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            color: "var(--muted)",
+                          }}
+                        >
+                          DIMENSIONS
+                        </Typography>
+                        <Typography
+                          sx={{
+                            fontSize: 9,
+                            fontWeight: 700,
+                            color: "var(--muted)",
+                            textAlign: "right",
+                            pr: 1,
+                          }}
+                        >
+                          WEIGHT
+                        </Typography>
+                        <Box />
+                      </Box>
+
+                      {req.items.map((item, idx) => (
+                        <Box
+                          key={item.itemId}
+                          sx={{
+                            display: "grid",
+                            gridTemplateColumns: "2fr 1fr 1.5fr 1fr 40px",
+                            gap: 1,
+                            px: 1.5,
+                            py: 1,
+                            alignItems: "center",
+                            borderTop:
+                              idx > 0
+                                ? "1px solid rgba(255,255,255,0.05)"
+                                : "none",
+                            "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 0.5,
+                            }}
+                          >
+                            <Typography variant="caption" fontWeight={500}>
+                              {item.description || "N/A"}
+                            </Typography>
+                            {item.isHazardous && (
+                              <Tooltip title="Hazardous Material">
+                                <Box
+                                  sx={{ color: "error.main", display: "flex" }}
+                                >
+                                  <ShieldAlert size={12} />
+                                </Box>
+                              </Tooltip>
+                            )}
+                          </Box>
+                          <Typography variant="caption">
+                            {formatNumber(item.quantity)}{" "}
+                            {item.unitOfMeasurement}
+                          </Typography>
+                          <Typography variant="caption" color="var(--muted)">
+                            {item.dimensions || "—"}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{ textAlign: "right", pr: 1, fontWeight: 600 }}
+                          >
+                            {item.weight
+                              ? `${formatNumber(item.weight, 1)}t`
+                              : "—"}
+                          </Typography>
+                          <Tooltip title="Delete Item">
+                            <IconButton
+                              size="small"
+                              onClick={() =>
+                                handleDeleteItem(req.requestId, item.itemId)
+                              }
+                              disabled={
+                                !!processingRequestId || !!processingItemId
+                              }
+                              sx={{
+                                color: "var(--muted)",
+                                "&:hover": { color: "error.main" },
+                              }}
+                            >
+                              {processingItemId === item.itemId ? (
+                                <CircularProgress size={14} color="inherit" />
+                              ) : (
+                                <X size={14} />
+                              )}
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Box>
+                ))
+              )}
+            </Box>
+          )}
+        </Box>
+      </DialogContent>
+
+      <DialogActions sx={{ p: 2 }}>
+        <Button
+          onClick={onClose}
+          variant="outlined"
+          sx={{ color: "var(--text)", borderColor: "var(--border)" }}
+        >
+          Close
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+function Divider({ sx, ...props }: any) {
+  return (
+    <Box sx={{ height: "1px", bgcolor: "var(--border)", ...sx }} {...props} />
+  );
+}

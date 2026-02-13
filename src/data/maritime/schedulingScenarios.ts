@@ -1,0 +1,227 @@
+// src/data/maritime/schedulingScenarios.ts
+
+export interface Platform {
+  id: string;
+  name: string;
+  type: "Production" | "Drilling";
+  frequency: "DAILY" | "WEEKLY";
+  zone: string;
+  lat: number;
+  lng: number;
+}
+
+export const MED_PORTS = [
+  { id: "marseille", name: "Marseille", lat: 43.2965, lng: 5.3698 },
+  { id: "geneva", name: "Geneva", lat: 46.2044, lng: 6.1432 },
+];
+
+export const MED_PLATFORMS: Platform[] = [
+  {
+    id: "p1",
+    name: "Alpha Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone A",
+    lat: 41.5,
+    lng: 6.2,
+  },
+  {
+    id: "p2",
+    name: "Bravo Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone A",
+    lat: 41.7,
+    lng: 6.4,
+  },
+  {
+    id: "p3",
+    name: "Charlie Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone B",
+    lat: 41.2,
+    lng: 7.0,
+  },
+  {
+    id: "p4",
+    name: "Delta Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone B",
+    lat: 41.1,
+    lng: 7.2,
+  },
+  {
+    id: "p5",
+    name: "Echo Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone C",
+    lat: 40.8,
+    lng: 8.0,
+  },
+  {
+    id: "p6",
+    name: "Foxtrot Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone C",
+    lat: 40.9,
+    lng: 8.2,
+  },
+  {
+    id: "p7",
+    name: "Golf Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone D",
+    lat: 42.1,
+    lng: 9.0,
+  },
+  {
+    id: "p8",
+    name: "Hotel Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone D",
+    lat: 42.2,
+    lng: 9.2,
+  },
+  {
+    id: "p9",
+    name: "India Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone E",
+    lat: 39.5,
+    lng: 7.5,
+  },
+  {
+    id: "p10",
+    name: "Juliet Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone E",
+    lat: 39.6,
+    lng: 7.7,
+  },
+  {
+    id: "p11",
+    name: "Kilo Production",
+    type: "Production",
+    frequency: "WEEKLY",
+    zone: "Zone F",
+    lat: 40.5,
+    lng: 5.5,
+  },
+  {
+    id: "anton",
+    name: "Anton Drilling",
+    type: "Drilling",
+    frequency: "WEEKLY",
+    zone: "Deep North",
+    lat: 43.0,
+    lng: 7.5,
+  },
+  {
+    id: "zora",
+    name: "Zora Drilling",
+    type: "Drilling",
+    frequency: "WEEKLY",
+    zone: "Deep South",
+    lat: 40.0,
+    lng: 6.5,
+  },
+];
+
+export const MED_VESSELS = [
+  {
+    id: "v1",
+    name: "Inspiration 1",
+    type: "PSV",
+    maxWeightCapacity: 3000,
+    cruisingSpeed: 12,
+    hourlyOperatingCost: 500,
+  },
+  {
+    id: "v2",
+    name: "Inspiration 2",
+    type: "PSV",
+    maxWeightCapacity: 3000,
+    cruisingSpeed: 12,
+    hourlyOperatingCost: 500,
+  },
+  {
+    id: "v3",
+    name: "Inspiration 3",
+    type: "PSV",
+    maxWeightCapacity: 3000,
+    cruisingSpeed: 12,
+    hourlyOperatingCost: 500,
+  },
+  {
+    id: "v4",
+    name: "Bourbon 1",
+    type: "AHTS",
+    maxWeightCapacity: 1200,
+    cruisingSpeed: 14,
+    hourlyOperatingCost: 800,
+  },
+  {
+    id: "v5",
+    name: "Bourbon 2",
+    type: "AHTS",
+    maxWeightCapacity: 1200,
+    cruisingSpeed: 14,
+    hourlyOperatingCost: 800,
+  },
+  {
+    id: "v6",
+    name: "Bourbon 3",
+    type: "AHTS",
+    maxWeightCapacity: 1200,
+    cruisingSpeed: 14,
+    hourlyOperatingCost: 800,
+  },
+  {
+    id: "v7",
+    name: "Fast Crew 1",
+    type: "Crew Boat",
+    maxWeightCapacity: 150,
+    cruisingSpeed: 25,
+    hourlyOperatingCost: 1200,
+  },
+  {
+    id: "v8",
+    name: "Fast Crew 2",
+    type: "Crew Boat",
+    maxWeightCapacity: 150,
+    cruisingSpeed: 25,
+    hourlyOperatingCost: 1200,
+  },
+  {
+    id: "v9",
+    name: "Vessel 9",
+    type: "PSV",
+    maxWeightCapacity: 3000,
+    cruisingSpeed: 12,
+    hourlyOperatingCost: 500,
+  },
+  {
+    id: "v10",
+    name: "Vessel 10",
+    type: "PSV",
+    maxWeightCapacity: 3000,
+    cruisingSpeed: 12,
+    hourlyOperatingCost: 500,
+  },
+  {
+    id: "v11",
+    name: "Vessel 11",
+    type: "PSV",
+    maxWeightCapacity: 3000,
+    cruisingSpeed: 12,
+    hourlyOperatingCost: 500,
+  },
+];
