@@ -108,8 +108,40 @@ export interface MovementRequest {
   comments?: string;
   notify?: string[]; // Array of user IDs or emails
 
+  // Aviation Selection & Approval
+  tripType?: "OneWay" | "RoundTrip";
+  selectedVoyageId?: string;
+  returnVoyageId?: string;
+  approverId?: string;
+  approvedAt?: string;
+  approverComments?: string;
+  returnEarliestDeparture?: string;
+  returnLatestArrival?: string;
+  scheduledDeparture?: string;
+  scheduledArrival?: string;
+  returnScheduledDeparture?: string;
+  returnScheduledArrival?: string;
+
   // Properties that might be calculated or aggregated
   totalWeight?: number;
   totalDeckArea?: number;
   dimension?: string; // Aggregated dimension string if needed for UI
+}
+
+export interface FlightSchedule {
+  scheduleId?: string;
+  helicopterId: string;
+  helicopterName?: string;
+  originId: string;
+  originName?: string;
+  destinationId: string;
+  destinationName?: string;
+  departureTime: string; // "HH:mm:ss"
+  durationMinutes: number;
+  frequency: "Daily" | "Weekly" | "Monthly";
+  daysOfWeek?: string; // "Mon,Wed,Fri"
+  dayOfMonth?: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }

@@ -8,10 +8,18 @@ import { LoginPage } from "./pages/LoginPage";
 import { MovementReqPage } from "./pages/MovementReqPage";
 import { MarinePlanner } from "./pages/MarinePlanner";
 import { VesselPage } from "./pages/VesselPage";
+import { HelicoptersPage } from "./pages/HelicoptersPage";
 import { SimulationPage } from "./pages/SimulationPage";
 import { CargoManifestPage } from "./pages/CargoManifestPage";
+import { AviationDashboardPage } from "./pages/AviationDashboardPage";
 import { VesselSchedulingPage } from "./pages/VesselSchedulingPage";
 import { SmtpSettings } from "./pages/SmtpSettings";
+import { AviationPlanner } from "./pages/AviationPlanner";
+import { HelicopterRequestPage } from "./pages/HelicopterRequestPage";
+import { UsersPage } from "./pages/UsersPage";
+import { RolesPage } from "./pages/RolesPage";
+import AviationApprovalPage from "./pages/Aviation/AviationApprovalPage";
+import FlightSchedulePage from "./pages/FlightSchedulePage";
 import { Topbar } from "./components/common/Topbar";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
 import { getAppTheme } from "./theme/appTheme";
@@ -90,25 +98,27 @@ function AppContent() {
                         element={<MovementReqPage />}
                       />
                       <Route path="/marine-vessels" element={<VesselPage />} />
-                      <Route
-                        path="/settings-users"
-                        element={<MarinePlanner />}
-                      />
-                      <Route
-                        path="/settings-roles"
-                        element={<MarinePlanner />}
-                      />
+                      <Route path="/settings-users" element={<UsersPage />} />
+                      <Route path="/settings-roles" element={<RolesPage />} />
                       <Route
                         path="/aviation-request"
-                        element={<MarinePlanner />}
+                        element={<HelicopterRequestPage />}
                       />
                       <Route
                         path="/aviation-planner"
-                        element={<MarinePlanner />}
+                        element={<AviationPlanner />}
                       />
                       <Route
                         path="/aviation-dashboard"
-                        element={<MarinePlanner />}
+                        element={<AviationDashboardPage />}
+                      />
+                      <Route
+                        path="/aviation-helicopters"
+                        element={<HelicoptersPage />}
+                      />
+                      <Route
+                        path="/aviation-schedules"
+                        element={<FlightSchedulePage />}
                       />
                       <Route
                         path="/marine-simulation"
@@ -123,6 +133,10 @@ function AppContent() {
                         element={<VesselSchedulingPage />}
                       />
                       <Route path="/settings-smtp" element={<SmtpSettings />} />
+                      <Route
+                        path="/approve-aviation/:requestId"
+                        element={<AviationApprovalPage />}
+                      />
                     </Routes>
                   </>
                 }

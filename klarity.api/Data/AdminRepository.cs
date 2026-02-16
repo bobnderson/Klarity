@@ -40,7 +40,7 @@ public class AdminRepository : IAdminRepository
             SELECT account_id, account_name, last_login, is_active 
             FROM auth.users;
             
-            SELECT account_id, role_id 
+            SELECT account_id AS AccountId, role_id AS RoleId 
             FROM auth.user_roles;";
 
         using var multi = await connection.QueryMultipleAsync(sql);
@@ -90,7 +90,7 @@ public class AdminRepository : IAdminRepository
 
             if (user.RoleIds.Any())
             {
-                const string roleSql = "INSERT INTO auth.user_roles (account_id, role_id) VALUES (@AccountId, @RoleId);";
+                const string roleSql = "INSERT INTO auth.user_roles (user_role_id, account_id, role_id) VALUES (newid(), @AccountId, @RoleId);";
                 await connection.ExecuteAsync(roleSql, user.RoleIds.Select(r => new { user.AccountId, RoleId = r }), transaction);
             }
 
@@ -120,7 +120,7 @@ public class AdminRepository : IAdminRepository
 
             if (user.RoleIds.Any())
             {
-                const string roleSql = "INSERT INTO auth.user_roles (account_id, role_id) VALUES (@AccountId, @RoleId);";
+                const string roleSql = "INSERT INTO auth.user_roles (user_role_id, account_id, role_id) VALUES (newid(), @AccountId, @RoleId);";
                 await connection.ExecuteAsync(roleSql, user.RoleIds.Select(r => new { user.AccountId, RoleId = r }), transaction);
             }
 
@@ -157,8 +157,8 @@ public class AdminRepository : IAdminRepository
     {
         using var connection = _dbConnectionFactory.CreateConnection();
         const string sql = @"
-            SELECT role_id, role_name, description FROM auth.roles;
-            SELECT role_id, menu_item_id FROM auth.role_menu_access;";
+            SELECT role_id, role_name, description, is_active FROM auth.roles;
+            SELECT role_id AS RoleId, menu_item_id AS MenuItemId FROM auth.role_menu_access;";
 
         using var multi = await connection.QueryMultipleAsync(sql);
         var roles = (await multi.ReadAsync<Role>()).ToList();
@@ -179,7 +179,7 @@ public class AdminRepository : IAdminRepository
     {
         using var connection = _dbConnectionFactory.CreateConnection();
         const string sql = @"
-            SELECT role_id, role_name, description FROM auth.roles WHERE role_id = @roleId;
+            SELECT role_id, role_name, description, is_active FROM auth.roles WHERE role_id = @roleId;
             SELECT menu_item_id FROM auth.role_menu_access WHERE role_id = @roleId;";
 
         using var multi = await connection.QueryMultipleAsync(sql, new { roleId });
@@ -198,7 +198,7 @@ public class AdminRepository : IAdminRepository
         using var transaction = connection.BeginTransaction();
         try
         {
-            const string sql = "INSERT INTO auth.roles (role_id, role_name, description) VALUES (@RoleId, @RoleName, @Description);";
+            const string sql = "INSERT INTO auth.roles (role_id, role_name, description, is_active) VALUES (@RoleId, @RoleName, @Description, @IsActive);";
             await connection.ExecuteAsync(sql, role, transaction);
 
             if (role.MenuItemIds.Any())
@@ -223,7 +223,7 @@ public class AdminRepository : IAdminRepository
         using var transaction = connection.BeginTransaction();
         try
         {
-            const string sql = "UPDATE auth.roles SET role_name = @RoleName, description = @Description WHERE role_id = @RoleId;";
+            const string sql = "UPDATE auth.roles SET role_name = @RoleName, description = @Description, is_active = @IsActive WHERE role_id = @RoleId;";
             await connection.ExecuteAsync(sql, role, transaction);
 
             await connection.ExecuteAsync("DELETE FROM auth.role_menu_access WHERE role_id = @RoleId;", new { role.RoleId }, transaction);

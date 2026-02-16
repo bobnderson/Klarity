@@ -97,8 +97,14 @@ builder.Services.AddMemoryCache();
     builder.Services.AddScoped<Klarity.Api.Data.ILocationRepository, Klarity.Api.Data.LocationRepository>();
     builder.Services.AddScoped<Klarity.Api.Data.IMovementRequestRepository, Klarity.Api.Data.MovementRequestRepository>();
     builder.Services.AddScoped<Klarity.Api.Data.IVoyageRepository, Klarity.Api.Data.VoyageRepository>();
+    builder.Services.AddScoped<Klarity.Api.Data.IFlightRepository, Klarity.Api.Data.FlightRepository>();
+    builder.Services.AddScoped<Klarity.Api.Data.IHelicopterRepository, Klarity.Api.Data.HelicopterRepository>();
     builder.Services.AddScoped<Klarity.Api.Data.ISettingsRepository, Klarity.Api.Data.SettingsRepository>();
-    builder.Services.AddScoped<Klarity.Api.Services.IEmailService, Klarity.Api.Services.EmailService>();
+    builder.Services.AddScoped<Klarity.Api.Services.IActiveDirectoryService, Klarity.Api.Services.ActiveDirectoryService>();
+builder.Services.AddScoped<Klarity.Api.Services.IEmailService, Klarity.Api.Services.EmailService>();
+builder.Services.AddScoped<Klarity.Api.Services.IPdfService, Klarity.Api.Services.PdfService>();
+
+    builder.Services.AddScoped<Klarity.Api.Data.IFlightScheduleRepository, Klarity.Api.Data.FlightScheduleRepository>();
 
     // Configure Authentication
     builder.Services.AddAuthentication(options =>
@@ -139,6 +145,49 @@ builder.Services.AddMemoryCache();
     app.UseAuthorization();
 
     app.MapControllers();
+
+    // Apply migrations
+    try
+    {
+        using (var scope = app.Services.CreateScope())
+        {
+            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
+            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+            
+            var migrationsDir = Path.Combine(app.Environment.ContentRootPath, "Data", "Migrations");
+            if (Directory.Exists(migrationsDir))
+            {
+                var migrationFiles = Directory.GetFiles(migrationsDir, "*.sql").OrderBy(f => f);
+                foreach (var migrationFile in migrationFiles)
+                {
+                    logger.LogInformation("Checking migration: {MigrationFile}", Path.GetFileName(migrationFile));
+                    var sql = File.ReadAllText(migrationFile);
+                    
+                    // SQL Server batch separator 'GO' should be on its own line
+                    var commands = System.Text.RegularExpressions.Regex.Split(sql, @"^\s*GO\s*$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    
+                    using (var connection = dbFactory.CreateConnection())
+                    {
+                        connection.Open();
+                        foreach (var cmd in commands)
+                        {
+                            if (string.IsNullOrWhiteSpace(cmd)) continue;
+                            try {
+                                connection.Execute(cmd);
+                            } catch (Exception ex) {
+                                logger.LogWarning("Error executing command in {MigrationFile}: {Error}", Path.GetFileName(migrationFile), ex.Message);
+                            }
+                        }
+                    }
+                    logger.LogInformation("Migration {MigrationFile} processed.", Path.GetFileName(migrationFile));
+                }
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Failed to apply migrations on startup");
+    }
 
     // Health check / Test endpoints
     app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow }));

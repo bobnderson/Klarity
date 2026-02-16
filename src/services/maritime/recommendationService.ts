@@ -25,6 +25,7 @@ export interface VoyageRecommendation {
   totalWeight?: number;
   totalDeckArea?: number;
   itemCount?: number;
+  messages?: string[];
 }
 
 export interface RecommendationSummary {

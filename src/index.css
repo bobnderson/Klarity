@@ -17,6 +17,11 @@
   --danger: #f87171;
   --radius: 6px;
   --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.4);
+
+  /* HSL Alpha Colors for effects */
+  --accent-alpha: rgba(56, 189, 248, 0.1);
+  --success-alpha: rgba(34, 197, 94, 0.1);
+  --panel-hover: rgba(255, 255, 255, 0.03);
 }
 
 .light-mode {
@@ -33,6 +38,10 @@
   --danger: #dc2626;
   --radius: 6px;
   --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.1);
+
+  --accent-alpha: rgba(2, 132, 199, 0.08);
+  --success-alpha: rgba(22, 163, 74, 0.08);
+  --panel-hover: rgba(0, 0, 0, 0.02);
 }
 
 * {
@@ -69,4 +78,22 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
+}
+
+.btn-primary-gradient {
+  background: linear-gradient(135deg, var(--accent), #0ea5e9) !important;
+  color: white !important;
+  transition: all 0.3s ease !important;
+}
+
+.btn-primary-gradient:hover {
+  box-shadow: 0 0 20px var(--accent-alpha) !important;
+  opacity: 0.9 !important;
+  transform: translateY(-1px);
+}
+
+.glass-panel {
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
 }

@@ -1,13 +1,11 @@
 -- Create system schema if it doesn't exist
-CREATE SCHEMA IF NOT EXISTS system;
+IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'system')
+BEGIN
+    EXEC('CREATE SCHEMA system');
+END
+GO
 
 -- Create settings table
-CREATE TABLE IF NOT EXISTS system.settings (
-    key VARCHAR(100) PRIMARY KEY,
-    value TEXT,
-    description VARCHAR(255),
-    "group" VARCHAR(50),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(100)
 );
 

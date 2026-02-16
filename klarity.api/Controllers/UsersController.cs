@@ -9,21 +9,24 @@ namespace Klarity.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize] // Require authentication by default
+[Authorize]
 [ValidateModel]
 public class UsersController : ControllerBase
 {
     private readonly IAdminRepository _adminRepository;
     private readonly IAuditService _auditService;
+    private readonly IActiveDirectoryService _adService;
     private readonly ILogger<UsersController> _logger;
 
     public UsersController(
         IAdminRepository adminRepository, 
         IAuditService auditService, 
+        IActiveDirectoryService adService,
         ILogger<UsersController> logger)
     {
         _adminRepository = adminRepository;
         _auditService = auditService;
+        _adService = adService;
         _logger = logger;
     }
 
@@ -31,6 +34,13 @@ public class UsersController : ControllerBase
     public async Task<ActionResult<IEnumerable<User>>> GetUsers()
     {
         var users = await _adminRepository.GetUsersAsync();
+        return Ok(users);
+    }
+
+    [HttpGet("search-ad")]
+    public async Task<ActionResult<IEnumerable<AdUserDto>>> SearchAdUsers([FromQuery] string query)
+    {
+        var users = await _adService.SearchUsersAsync(query);
         return Ok(users);
     }
 

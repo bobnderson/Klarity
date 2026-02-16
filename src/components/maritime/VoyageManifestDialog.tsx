@@ -33,7 +33,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import type { Voyage, Vessel } from "../../types/maritime/marine";
+import type { UnifiedVoyage, UnifiedVessel } from "../../types/maritime/marine";
 import type { MovementRequest } from "../../types/maritime/logistics";
 import { marineMovementService } from "../../services/maritime/marineMovementService";
 import {
@@ -41,14 +41,19 @@ import {
   assignItemsToVoyage,
   unassignItemsFromVoyage,
 } from "../../services/maritime/voyageService";
+import {
+  getFlightManifest,
+  assignItemsToFlight,
+  unassignItemsFromFlight,
+} from "../../services/maritime/flightService";
 import { toast } from "react-toastify";
 import { formatNumber } from "../../utils/formatters";
 
 interface VoyageManifestDialogProps {
   open: boolean;
   onClose: () => void;
-  voyage: Voyage | undefined;
-  vessel: Vessel | undefined;
+  voyage: UnifiedVoyage | undefined;
+  vessel: UnifiedVessel | undefined;
   onUpdate?: () => void;
 }
 
@@ -59,6 +64,11 @@ export function VoyageManifestDialog({
   vessel,
   onUpdate,
 }: VoyageManifestDialogProps) {
+  const isAviation = (vessel as any)?.helicopterId !== undefined;
+  const vid = (voyage as any)?.voyageId || (voyage as any)?.flightId;
+  const vesselName =
+    (vessel as any)?.vesselName || (vessel as any)?.helicopterName;
+  const arrTime = (voyage as any)?.eta || (voyage as any)?.arrivalDateTime;
   const [assignedRequests, setAssignedRequests] = useState<MovementRequest[]>(
     [],
   );
@@ -81,9 +91,11 @@ export function VoyageManifestDialog({
   }, [open, voyage]);
 
   const loadManifestData = async () => {
-    if (!voyage) return;
+    if (!voyage || !vid) return;
     try {
-      const assigned = await getVoyageManifest(voyage.voyageId);
+      const assigned = isAviation
+        ? await getFlightManifest(vid)
+        : await getVoyageManifest(vid);
       setAssignedRequests(assigned);
     } catch (error) {
       console.error("Failed to load manifest data:", error);
@@ -103,6 +115,7 @@ export function VoyageManifestDialog({
       const available = await marineMovementService.getPendingMovementRequests({
         originId: voyage.originId,
         destinationId: voyage.destinationId,
+        mode: isAviation ? "Aviation" : "Marine",
       });
       setAvailableRequests(available);
     } catch (error) {
@@ -120,9 +133,13 @@ export function VoyageManifestDialog({
       setProcessingRequestId(requestId);
       // Unassign all items in this request from the current voyage
       const request = assignedRequests.find((r) => r.requestId === requestId);
-      if (request && voyage) {
+      if (request && voyage && vid) {
         const itemIds = request.items.map((i) => i.itemId);
-        await unassignItemsFromVoyage(voyage.voyageId, itemIds);
+        if (isAviation) {
+          await unassignItemsFromFlight(vid, itemIds);
+        } else {
+          await unassignItemsFromVoyage(vid, itemIds);
+        }
       }
       toast.info("Request removed from manifest");
       loadManifestData();
@@ -140,8 +157,12 @@ export function VoyageManifestDialog({
       const request = assignedRequests.find((r) => r.requestId === requestId);
       if (!request) return;
 
-      if (voyage) {
-        await unassignItemsFromVoyage(voyage.voyageId, [itemId]);
+      if (voyage && vid) {
+        if (isAviation) {
+          await unassignItemsFromFlight(vid, [itemId]);
+        } else {
+          await unassignItemsFromVoyage(vid, [itemId]);
+        }
       }
       toast.info("Item removed from manifest");
       loadManifestData();
@@ -156,14 +177,19 @@ export function VoyageManifestDialog({
   const handleAddRequest = async (requestId: string) => {
     if (!voyage) return;
     try {
+      setProcessingRequestId(requestId);
       const request = availableRequests.find((r) => r.requestId === requestId);
-      if (request) {
+      if (request && vid) {
         // Assign ALL unassigned items to this voyage
         const itemIds = request.items
           .filter((i) => !i.assignedVoyageId)
           .map((i) => i.itemId);
 
-        await assignItemsToVoyage(voyage.voyageId, itemIds);
+        if (isAviation) {
+          await assignItemsToFlight(vid, itemIds);
+        } else {
+          await assignItemsToVoyage(vid, itemIds);
+        }
       }
       toast.success("Request added to manifest");
       setIsAddingMode(false);
@@ -171,6 +197,8 @@ export function VoyageManifestDialog({
       if (onUpdate) onUpdate();
     } catch (error) {
       toast.error("Failed to add request");
+    } finally {
+      setProcessingRequestId(null);
     }
   };
 
@@ -178,7 +206,11 @@ export function VoyageManifestDialog({
     if (!voyage) return;
     try {
       setProcessingItemId(itemId);
-      await assignItemsToVoyage(voyage.voyageId, [itemId]);
+      if (isAviation) {
+        await assignItemsToFlight(vid || "", [itemId]);
+      } else {
+        await assignItemsToVoyage(vid || "", [itemId]);
+      }
       toast.success("Item added to manifest");
 
       // Refresh data
@@ -216,7 +248,11 @@ export function VoyageManifestDialog({
     // Header Info
     doc.setFontSize(10);
     doc.setTextColor(100);
-    doc.text(`Voyage ID: ${voyage.voyageId.toUpperCase()}`, 14, 25);
+    doc.text(
+      `${(isAviation ? "Flight ID: " : "Voyage ID: ") + (vid || "").toUpperCase()}`,
+      14,
+      25,
+    );
     doc.text(
       `Generated: ${dayjs().format("DD MMM YYYY HH:mm")}`,
       pageWidth - 14,
@@ -230,14 +266,18 @@ export function VoyageManifestDialog({
 
     doc.setFontSize(11);
     doc.setTextColor(0);
-    doc.text("VESSEL DETAILS", 14, 35);
+    doc.text(isAviation ? "AIRCRAFT DETAILS" : "VESSEL DETAILS", 14, 35);
     doc.setFontSize(9);
-    doc.text(`Name: ${vessel.vesselName}`, 14, 40);
-    doc.text(`Type: ${vessel.vesselTypeId || "N/A"}`, 14, 45);
-    doc.text(`Owner: ${vessel.owner || "N/A"}`, 14, 50);
+    doc.text(`Name: ${vesselName}`, 14, 40);
+    doc.text(
+      `Type: ${(vessel as any).vesselTypeId || (vessel as any).helicopterTypeId || "N/A"}`,
+      14,
+      45,
+    );
+    doc.text(`Owner: ${(vessel as any).owner || "N/A"}`, 14, 50);
 
     doc.setFontSize(11);
-    doc.text("VOYAGE DETAILS", 100, 35);
+    doc.text(isAviation ? "FLIGHT DETAILS" : "VOYAGE DETAILS", 100, 35);
     doc.setFontSize(9);
     doc.text(
       `Route: ${voyage.originName || voyage.originId} to ${voyage.destinationName || voyage.destinationId}`,
@@ -249,15 +289,27 @@ export function VoyageManifestDialog({
       100,
       45,
     );
-    doc.text(`ETA: ${dayjs(voyage.eta).format("DD MMM YYYY HH:mm")}`, 100, 50);
+    doc.text(`Arrival: ${dayjs(arrTime).format("DD MMM YYYY HH:mm")}`, 100, 50);
 
     // Summary Metrics
     doc.setFontSize(11);
     doc.text("UTILIZATION", 160, 35);
     doc.setFontSize(9);
-    doc.text(`Weight: ${voyage.weightUtil}%`, 160, 40);
-    doc.text(`Deck: ${voyage.deckUtil}%`, 160, 45);
-    doc.text(`Cabin: ${voyage.cabinUtil}%`, 160, 50);
+    doc.text(
+      `Weight: ${(voyage as any).weightUtil || (voyage as any).payloadUtil}%`,
+      160,
+      40,
+    );
+    doc.text(
+      `Deck/Cabin: ${(voyage as any).deckUtil || (voyage as any).cabinUtil}%`,
+      160,
+      45,
+    );
+    doc.text(
+      `Pax: ${(voyage as any).paxCurrent || 0} / ${(voyage as any).paxCapacity || 0}`,
+      160,
+      50,
+    );
 
     // Table of Items
     const tableData = assignedRequests.flatMap((req) =>
@@ -271,6 +323,7 @@ export function VoyageManifestDialog({
           req.requestId.substring(0, 8).toUpperCase(),
           (consignment as any)?.categoryName || item.categoryId,
           itemTypeLabel,
+          item.isHazardous ? "YES" : "-",
           item.quantity,
           item.dimensions || "-",
           item.weight ? `${item.weight} t` : "-",
@@ -286,6 +339,7 @@ export function VoyageManifestDialog({
           "REQ ID",
           "CONS. TYPE",
           "ITEM TYPE",
+          "HAZ",
           "QTY",
           "DIMENSIONS",
           "WEIGHT",
@@ -313,20 +367,40 @@ export function VoyageManifestDialog({
       );
     }
 
-    doc.save(
-      `Manifest_${vessel.vesselName}_${voyage.voyageId.substring(0, 6)}.pdf`,
-    );
+    doc.save(`Manifest_${vesselName}_${(vid || "").substring(0, 6)}.pdf`);
     toast.success("Manifest PDF generated successfully");
   };
 
-  const parseArea = (dimensions: string | undefined, qty: number): number => {
+  const parseArea = (
+    dimensions: string | undefined,
+    qty: number,
+    unit: string | undefined,
+  ): number => {
     if (!dimensions || dimensions === "0 x 0 x 0") return 0;
     const parts = dimensions
       .toLowerCase()
       .split("x")
       .map((p) => parseFloat(p.trim()));
     if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return parts[0] * parts[1] * qty;
+      let area = parts[0] * parts[1];
+      // Convert to m2 if needed
+      if (unit) {
+        switch (unit.toLowerCase()) {
+          case "ft":
+          case "ft3":
+            area = area * 0.092903;
+            break;
+          case "in":
+          case "in3":
+            area = area * 0.00064516;
+            break;
+          case "cm":
+          case "cm3":
+            area = area * 0.0001;
+            break;
+        }
+      }
+      return area * qty;
     }
     return 0;
   };
@@ -338,7 +412,11 @@ export function VoyageManifestDialog({
     assignedRequests.forEach((req) => {
       req.items.forEach((item) => {
         totalWeight += item.weight || 0;
-        totalArea += parseArea(item.dimensions, item.quantity);
+        totalArea += parseArea(
+          item.dimensions,
+          item.quantity,
+          item.dimensionUnit,
+        );
       });
     });
 
@@ -347,7 +425,10 @@ export function VoyageManifestDialog({
 
   if (!voyage) return null;
 
-  const vesselCap = vessel?.capacities || { deadWeight: 0, deckArea: 0 };
+  const vesselCap = (vessel as any)?.capacities || {
+    deadWeight: 0,
+    deckArea: 0,
+  };
   const remainingWeight = Math.max(
     0,
     (vesselCap.deadWeight || 0) - manifestStats.totalWeight,
@@ -382,7 +463,9 @@ export function VoyageManifestDialog({
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
           <FileText size={20} color="var(--accent)" />
-          <Typography variant="h6">Voyage Manifest</Typography>
+          <Typography variant="h6">
+            {isAviation ? "Flight Manifest" : "Voyage Manifest"}
+          </Typography>
           <Typography
             variant="caption"
             sx={{
@@ -394,7 +477,7 @@ export function VoyageManifestDialog({
               borderRadius: 1,
             }}
           >
-            {voyage.voyageId}
+            {vid}
           </Typography>
         </Box>
         <Box>
@@ -440,10 +523,10 @@ export function VoyageManifestDialog({
                 color="var(--muted)"
                 display="block"
               >
-                VESSEL
+                {isAviation ? "AIRCRAFT" : "VESSEL"}
               </Typography>
               <Typography variant="body2" fontWeight={700}>
-                {voyage.vesselName}
+                {vesselName}
               </Typography>
             </Box>
             <Box>
@@ -477,10 +560,10 @@ export function VoyageManifestDialog({
                 color="var(--muted)"
                 display="block"
               >
-                EST. ARRIVAL
+                {isAviation ? "ARRIVAL" : "EST. ARRIVAL"}
               </Typography>
               <Typography variant="body2">
-                {new Date(voyage.eta).toLocaleString()}
+                {new Date(arrTime).toLocaleString()}
               </Typography>
             </Box>
           </Box>
@@ -539,7 +622,7 @@ export function VoyageManifestDialog({
                   color="var(--muted)"
                   display="block"
                 >
-                  DEADWEIGHT (T)
+                  {isAviation ? "PAYLOAD (T)" : "DEADWEIGHT (T)"}
                 </Typography>
                 <Typography variant="body2">
                   <span style={{ fontWeight: 700 }}>
@@ -600,15 +683,26 @@ export function VoyageManifestDialog({
 
             <Box sx={{ ml: "auto", display: "flex", gap: 1 }}>
               <Chip
-                label={`Weight: ${formatNumber(voyage.weightUtil, 1)}%`}
+                label={`Weight: ${formatNumber((voyage as any).weightUtil || (voyage as any).payloadUtil || 0, 1)}%`}
                 size="small"
-                color={voyage.weightUtil > 85 ? "error" : "primary"}
+                color={
+                  ((voyage as any).weightUtil ||
+                    (voyage as any).payloadUtil ||
+                    0) > 85
+                    ? "error"
+                    : "primary"
+                }
                 sx={{ height: 20, fontSize: 10 }}
               />
               <Chip
-                label={`Deck: ${formatNumber(voyage.deckUtil, 1)}%`}
+                label={`${isAviation ? "Cabin" : "Deck"}: ${formatNumber((voyage as any).deckUtil || (voyage as any).cabinUtil || 0, 1)}%`}
                 size="small"
-                color={voyage.deckUtil > 85 ? "error" : "primary"}
+                color={
+                  ((voyage as any).deckUtil || (voyage as any).cabinUtil || 0) >
+                  85
+                    ? "error"
+                    : "primary"
+                }
                 sx={{ height: 20, fontSize: 10 }}
               />
             </Box>
@@ -700,7 +794,14 @@ export function VoyageManifestDialog({
                         <Button
                           variant="outlined"
                           size="small"
-                          startIcon={<Plus size={14} />}
+                          disabled={processingRequestId === req.requestId}
+                          startIcon={
+                            processingRequestId === req.requestId ? (
+                              <CircularProgress size={14} color="inherit" />
+                            ) : (
+                              <Plus size={14} />
+                            )
+                          }
                           onClick={(e) => {
                             e.stopPropagation();
                             handleAddRequest(req.requestId);
@@ -751,7 +852,27 @@ export function VoyageManifestDialog({
                                 }}
                               >
                                 <Box>
-                                  {item.itemTypeName || item.description}
+                                  <Box
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 1,
+                                    }}
+                                  >
+                                    {item.itemTypeName || item.description}
+                                    {item.isHazardous && (
+                                      <Tooltip title="Hazardous Material">
+                                        <Box
+                                          sx={{
+                                            color: "error.main",
+                                            display: "flex",
+                                          }}
+                                        >
+                                          <ShieldAlert size={12} />
+                                        </Box>
+                                      </Tooltip>
+                                    )}
+                                  </Box>
                                   <Typography
                                     variant="caption"
                                     color="var(--muted)"
@@ -917,7 +1038,7 @@ export function VoyageManifestDialog({
                             color: "var(--muted)",
                           }}
                         >
-                          DESCRIPTION
+                          ITEM TYPE
                         </Typography>
                         <Typography
                           sx={{
@@ -976,7 +1097,10 @@ export function VoyageManifestDialog({
                             }}
                           >
                             <Typography variant="caption" fontWeight={500}>
-                              {item.description || "N/A"}
+                              {item.itemTypeName ||
+                                item.itemTypeId ||
+                                item.description ||
+                                "N/A"}
                             </Typography>
                             {item.isHazardous && (
                               <Tooltip title="Hazardous Material">

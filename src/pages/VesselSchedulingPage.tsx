@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { VesselSchedulingSidebar } from "../components/vessel-scheduling/VesselSchedulingSidebar";
 import { ScheduleView } from "../components/vessel-scheduling/ScheduleView";
 import { DataExplorerView } from "../components/vessel-scheduling/DataExplorerView";
+import { SmtpSettings } from "./SmtpSettings";
 
 export function VesselSchedulingPage() {
   return (
@@ -15,6 +16,7 @@ export function VesselSchedulingPage() {
           <Route path="/" element={<Navigate to="schedule" replace />} />
           <Route path="schedule" element={<ScheduleView />} />
           <Route path="data-explorer" element={<DataExplorerView />} />
+          <Route path="settings" element={<SmtpSettings />} />
           <Route path="*" element={<ScheduleView />} />
         </Routes>
       </Box>

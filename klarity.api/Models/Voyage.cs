@@ -25,6 +25,10 @@ public class Voyage
     public string? StatusId { get; set; }
     public string? StatusName { get; set; }
     
+    public double CostPerPax { get; set; }
+    public int PaxCapacity { get; set; }
+    public int PaxCurrent { get; set; }
+    
     [Column("is_deleted")]
     public bool IsDeleted { get; set; }
 

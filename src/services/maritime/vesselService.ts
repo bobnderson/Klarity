@@ -1,8 +1,10 @@
 import api from "../api";
 import type { Vessel } from "../../types/maritime/marine";
 
-export const getVessels = async (): Promise<Vessel[]> => {
-  const response = await api.get<Vessel[]>("vessels");
+export const getVessels = async (category?: string): Promise<Vessel[]> => {
+  const response = await api.get<Vessel[]>("vessels", {
+    params: { category },
+  });
   return response.data;
 };
 

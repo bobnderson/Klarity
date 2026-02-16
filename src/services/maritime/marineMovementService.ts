@@ -2,17 +2,31 @@ import api from "../api";
 import type { MovementRequest } from "../../types/maritime/logistics";
 
 export const marineMovementService = {
-  async getMovementRequests(): Promise<MovementRequest[]> {
-    const response = await api.get<MovementRequest[]>("MovementRequests");
+  async getMovementRequests(
+    startDate?: string,
+    endDate?: string,
+    mode: "Marine" | "Aviation" = "Marine",
+  ): Promise<MovementRequest[]> {
+    const response = await api.get<MovementRequest[]>("MovementRequests", {
+      params: { startDate, endDate, mode },
+    });
     return response.data;
   },
 
   async getUnscheduledMovementRequests(
     accountId: string,
-  ): Promise<MovementRequest[]> {
-    const response = await api.get<MovementRequest[]>(
-      `MovementRequests/account/${accountId}`,
-    );
+    page: number = 1,
+    pageSize: number = 20,
+    mode: "Marine" | "Aviation" = "Marine",
+    startDate?: string,
+    endDate?: string,
+  ): Promise<{ items: MovementRequest[]; totalCount: number }> {
+    const response = await api.get<{
+      items: MovementRequest[];
+      totalCount: number;
+    }>(`MovementRequests/account/${accountId}`, {
+      params: { page, pageSize, mode, startDate, endDate },
+    });
     return response.data;
   },
 
@@ -25,10 +39,12 @@ export const marineMovementService = {
 
   async createMovementRequest(
     request: MovementRequest,
+    mode: "Marine" | "Aviation" = "Marine",
   ): Promise<MovementRequest> {
     const response = await api.post<MovementRequest>(
       "MovementRequests",
       request,
+      { params: { mode } },
     );
     return response.data;
   },
@@ -36,21 +52,27 @@ export const marineMovementService = {
   async updateMovementRequest(
     requestId: string,
     updates: Partial<MovementRequest>,
+    mode: "Marine" | "Aviation" = "Marine",
   ): Promise<MovementRequest> {
     const response = await api.put<MovementRequest>(
       `MovementRequests/${requestId}`,
       updates,
+      { params: { mode } },
     );
     return response.data;
   },
 
-  async deleteMovementRequest(requestId: string): Promise<void> {
-    await api.delete(`MovementRequests/${requestId}`);
+  async deleteMovementRequest(
+    requestId: string,
+    mode: "Marine" | "Aviation" = "Marine",
+  ): Promise<void> {
+    await api.delete(`MovementRequests/${requestId}`, { params: { mode } });
   },
 
   async getPendingMovementRequests(filters?: {
     originId?: string;
     destinationId?: string;
+    mode?: "Marine" | "Aviation";
   }): Promise<MovementRequest[]> {
     const response = await api.get<MovementRequest[]>(
       "MovementRequests/unscheduled",
@@ -66,5 +88,7 @@ export const getRequestsByAccountId =
 export const createRequest = marineMovementService.createMovementRequest;
 export const updateRequest = marineMovementService.updateMovementRequest;
 export const deleteRequest = marineMovementService.deleteMovementRequest;
+export const getMovementRequestById =
+  marineMovementService.getMovementRequestById;
 export const getPendingRequests =
   marineMovementService.getPendingMovementRequests;

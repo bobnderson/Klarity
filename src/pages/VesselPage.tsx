@@ -12,9 +12,10 @@ import {
   Paper,
   Chip,
   IconButton,
-  CircularProgress,
   Backdrop,
+  CircularProgress,
 } from "@mui/material";
+import { LoadingIndicator } from "../components/common/LoadingIndicator";
 import { toast } from "react-toastify";
 import {
   Plus,
@@ -25,6 +26,7 @@ import {
   Filter,
   MoreVertical,
   Settings,
+  X,
 } from "lucide-react";
 import {
   InputAdornment,
@@ -216,12 +218,18 @@ export function VesselPage() {
             sx={{
               display: "flex",
               gap: 2,
-              mb: 1,
-              p: 2,
+              mb: 3,
+              p: 1.5,
               bgcolor: "var(--panel)",
-              borderRadius: 2,
+              borderRadius: "12px",
               border: "1px solid var(--border)",
               alignItems: "center",
+              boxShadow:
+                "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+              transition: "all 0.2s ease-in-out",
+              "&:hover": {
+                borderColor: "rgba(255, 178, 0, 0.3)",
+              },
             }}
           >
             <TextField
@@ -231,186 +239,263 @@ export function VesselPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               sx={{
                 flex: 1,
-                "& .MuiInputBase-root": { bgcolor: "rgba(255,255,255,0.02)" },
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: "rgba(255,255,255,0.02)",
+                  borderRadius: "8px",
+                  "& fieldset": { borderColor: "transparent" },
+                  "&:hover fieldset": { borderColor: "transparent" },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "var(--accent)",
+                    opacity: 0.5,
+                  },
+                },
               }}
               InputProps={{
                 startAdornment: (
-                  <InputAdornment position="start">
-                    <Search size={18} color="var(--muted)" />
+                  <InputAdornment position="start" sx={{ mr: 1.5 }}>
+                    <Search
+                      size={18}
+                      color="var(--accent)"
+                      style={{ opacity: 0.8 }}
+                    />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery && (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setSearchQuery("")}
+                      sx={{
+                        color: "var(--muted)",
+                        "&:hover": { color: "var(--danger)" },
+                      }}
+                    >
+                      <X size={14} />
+                    </IconButton>
                   </InputAdornment>
                 ),
               }}
             />
+
+            <Box
+              sx={{
+                width: "1px",
+                height: "24px",
+                bgcolor: "var(--border)",
+                mx: 1,
+              }}
+            />
+
             <TextField
               select
               size="small"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               sx={{
-                width: 160,
-                "& .MuiInputBase-root": { bgcolor: "rgba(255,255,255,0.02)" },
+                width: 180,
+                "& .MuiOutlinedInput-root": {
+                  bgcolor: "rgba(255,255,255,0.02)",
+                  borderRadius: "8px",
+                  "& fieldset": { borderColor: "transparent" },
+                  "&:hover fieldset": { borderColor: "transparent" },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "var(--accent)",
+                    opacity: 0.5,
+                  },
+                },
               }}
               InputProps={{
                 startAdornment: (
-                  <InputAdornment position="start">
-                    <Filter size={18} color="var(--muted)" />
+                  <InputAdornment position="start" sx={{ mr: 1 }}>
+                    <Filter
+                      size={18}
+                      color="var(--accent)"
+                      style={{ opacity: 0.8 }}
+                    />
                   </InputAdornment>
                 ),
               }}
             >
-              <MuiMenuItem value="All">All Statuses</MuiMenuItem>
-              {vesselStatuses.map((status) => (
-                <MuiMenuItem key={status.statusId} value={status.statusId}>
-                  {status.status}
-                </MuiMenuItem>
-              ))}
+              <MuiMenuItem value="All" sx={{ fontSize: "0.875rem" }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <Typography variant="body2">All Statuses</Typography>
+                </Box>
+              </MuiMenuItem>
+              {vesselStatuses.map((status) => {
+                const style = getVesselStatusStyle(status.status);
+                return (
+                  <MuiMenuItem
+                    key={status.statusId}
+                    value={status.statusId}
+                    sx={{ fontSize: "0.875rem" }}
+                  >
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box
+                        sx={{
+                          w: 8,
+                          h: 8,
+                          borderRadius: "50%",
+                          // Map MUI colors to hex for the dot
+                          bgcolor:
+                            style.color === "success"
+                              ? "#10b981"
+                              : style.color === "warning"
+                                ? "#f59e0b"
+                                : style.color === "error"
+                                  ? "#ef4444"
+                                  : style.color === "info"
+                                    ? "#3b82f6"
+                                    : "#6b7280",
+                        }}
+                      />
+                      <Typography variant="body2">{status.status}</Typography>
+                    </Box>
+                  </MuiMenuItem>
+                );
+              })}
             </TextField>
           </Box>
 
-          {loading ? (
-            <Box sx={{ p: 4, display: "flex", justifyContent: "center" }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <TableContainer
-              component={Paper}
-              sx={{
-                flex: 1,
-                bgcolor: "var(--panel)",
-                border: "1px solid var(--border)",
-                boxShadow: "var(--shadow-soft)",
-                overflowY: "auto",
-              }}
-            >
-              <Table stickyHeader>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: "rgba(255,255,255,0.02)" }}>
-                    <TableCell
-                      sx={{
-                        color: "var(--text-secondary)",
-                        fontWeight: 700,
-                        py: 2,
-                      }}
-                    >
-                      Name
+          {loading && <LoadingIndicator />}
+
+          <TableContainer
+            component={Paper}
+            sx={{
+              flex: 1,
+              bgcolor: "var(--panel)",
+              border: "1px solid var(--border)",
+              boxShadow: "var(--shadow-soft)",
+              overflowY: "auto",
+            }}
+          >
+            <Table stickyHeader>
+              <TableHead>
+                <TableRow sx={{ bgcolor: "rgba(255,255,255,0.02)" }}>
+                  <TableCell
+                    sx={{
+                      color: "var(--text-secondary)",
+                      fontWeight: 700,
+                      py: 2,
+                    }}
+                  >
+                    Name
+                  </TableCell>
+                  <TableCell
+                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+                  >
+                    Type
+                  </TableCell>
+                  <TableCell
+                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+                  >
+                    Owner
+                  </TableCell>
+                  <TableCell
+                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+                  >
+                    Status
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+                  >
+                    Hourly Cost
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+                  >
+                    LOA (m)
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+                  >
+                    DWT (MT)
+                  </TableCell>
+                  <TableCell
+                    align="right"
+                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+                  >
+                    Complement
+                  </TableCell>
+                  <TableCell
+                    align="center"
+                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+                  >
+                    Actions
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {filteredVessels.map((vessel) => (
+                  <TableRow
+                    key={vessel.vesselId}
+                    hover
+                    sx={{
+                      "&:last-child td, &:last-child th": { border: 0 },
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
+                    }}
+                  >
+                    <TableCell sx={{ fontWeight: 600, color: "var(--text)" }}>
+                      {vessel.vesselName}
                     </TableCell>
-                    <TableCell
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Type
+                    <TableCell sx={{ color: "var(--text)" }}>
+                      {vessel.vesselTypeName || vessel.vesselTypeId || "-"}
                     </TableCell>
-                    <TableCell
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Owner
+                    <TableCell sx={{ color: "var(--text)" }}>
+                      {vessel.owner || "-"}
                     </TableCell>
-                    <TableCell
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Status
+                    <TableCell>
+                      {(() => {
+                        const statusObj = vesselStatuses.find(
+                          (s) => s.statusId === vessel.statusId,
+                        );
+                        const statusName =
+                          statusObj?.status || vessel.statusId || "Unknown";
+                        const style = getVesselStatusStyle(statusName);
+                        return (
+                          <Chip
+                            variant="outlined"
+                            label={style.label}
+                            size="small"
+                            color={style.color as any}
+                            sx={{
+                              fontWeight: 600,
+                              fontSize: "0.65rem",
+                              height: 20,
+                              px: 0.5,
+                            }}
+                          />
+                        );
+                      })()}
                     </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Hourly Cost
+                    <TableCell align="right" sx={{ color: "var(--text)" }}>
+                      {formatCurrency(vessel.financials?.hourlyOperatingCost)}
                     </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      LOA (m)
+                    <TableCell align="right" sx={{ color: "var(--text)" }}>
+                      {formatNumber(vessel.particulars?.loa)}
                     </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      DWT (MT)
+                    <TableCell align="right" sx={{ color: "var(--text)" }}>
+                      {formatNumber(vessel.capacities?.deadWeight)}
                     </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Complement
+                    <TableCell align="right" sx={{ color: "var(--text)" }}>
+                      {formatNumber(vessel.capacities?.totalComplement)}
                     </TableCell>
-                    <TableCell
-                      align="center"
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Actions
+                    <TableCell align="center">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleActionClick(e, vessel)}
+                        sx={{ color: "var(--muted)" }}
+                      >
+                        <MoreVertical size={18} />
+                      </IconButton>
                     </TableCell>
                   </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredVessels.map((vessel) => (
-                    <TableRow
-                      key={vessel.vesselId}
-                      hover
-                      sx={{
-                        "&:last-child td, &:last-child th": { border: 0 },
-                        "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
-                      }}
-                    >
-                      <TableCell sx={{ fontWeight: 600, color: "var(--text)" }}>
-                        {vessel.vesselName}
-                      </TableCell>
-                      <TableCell sx={{ color: "var(--text)" }}>
-                        {vessel.vesselTypeName || vessel.vesselTypeId || "-"}
-                      </TableCell>
-                      <TableCell sx={{ color: "var(--text)" }}>
-                        {vessel.owner || "-"}
-                      </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const statusObj = vesselStatuses.find(
-                            (s) => s.statusId === vessel.statusId,
-                          );
-                          const statusName =
-                            statusObj?.status || vessel.statusId || "Unknown";
-                          const style = getVesselStatusStyle(statusName);
-                          return (
-                            <Chip
-                              variant="outlined"
-                              label={style.label}
-                              size="small"
-                              color={style.color as any}
-                              sx={{
-                                fontWeight: 600,
-                                fontSize: "0.65rem",
-                                height: 20,
-                                px: 0.5,
-                              }}
-                            />
-                          );
-                        })()}
-                      </TableCell>
-                      <TableCell align="right" sx={{ color: "var(--text)" }}>
-                        {formatCurrency(vessel.financials?.hourlyOperatingCost)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ color: "var(--text)" }}>
-                        {formatNumber(vessel.particulars?.loa)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ color: "var(--text)" }}>
-                        {formatNumber(vessel.capacities?.deadWeight)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ color: "var(--text)" }}>
-                        {formatNumber(vessel.capacities?.totalComplement)}
-                      </TableCell>
-                      <TableCell align="center">
-                        <IconButton
-                          size="small"
-                          onClick={(e) => handleActionClick(e, vessel)}
-                          sx={{ color: "var(--muted)" }}
-                        >
-                          <MoreVertical size={18} />
-                        </IconButton>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </>
       ) : (
         <VesselDesign

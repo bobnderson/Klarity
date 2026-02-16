@@ -196,7 +196,9 @@ export function DeckView2D({
                                 <Typography
                                   sx={{ fontSize: 10, fontWeight: 700 }}
                                 >
-                                  {item.description || "Cargo"}
+                                  {item.itemTypeName ||
+                                    item.description ||
+                                    "Cargo"}
                                 </Typography>
                                 <Typography sx={{ fontSize: 9, opacity: 0.8 }}>
                                   {item.quantity} {item.unitOfMeasurement} ·{" "}

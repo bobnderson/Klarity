@@ -8,6 +8,10 @@ END
 GO
 
 -- 1. Create item_categories table
+IF OBJECT_ID('logistics.item_types', 'U') IS NOT NULL
+    DROP TABLE logistics.item_types;
+GO
+
 IF OBJECT_ID('logistics.item_categories', 'U') IS NOT NULL
     DROP TABLE logistics.item_categories;
 GO
@@ -19,10 +23,6 @@ CREATE TABLE logistics.item_categories (
 GO
 
 -- 2. Create item_types table
-IF OBJECT_ID('logistics.item_types', 'U') IS NOT NULL
-    DROP TABLE logistics.item_types;
-GO
-
 CREATE TABLE logistics.item_types (
     type_id VARCHAR(50) PRIMARY KEY,
     category_id VARCHAR(50) NOT NULL REFERENCES logistics.item_categories(category_id),

@@ -28,7 +28,10 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response && error.response.status === 401) {
-      console.warn("Unauthorized access");
+      console.warn("Unauthorized access - redirecting to login");
+      sessionStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem("user_data");
+      window.location.href = "/login";
     }
     return Promise.reject(error);
   },

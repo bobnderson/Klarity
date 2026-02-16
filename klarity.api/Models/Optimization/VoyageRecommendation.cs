@@ -12,6 +12,7 @@ namespace Klarity.Api.Models.Optimization
         public DateTime LatestDeparture { get; set; }
         public DateTime EarliestArrival { get; set; }
         public DateTime LatestArrival { get; set; }
+        public string UrgencyId { get; set; } = string.Empty;
         public double UrgencyScore { get; set; }
         public double TotalDeckArea { get; set; }
         public double TotalWeight { get; set; }
@@ -39,6 +40,7 @@ namespace Klarity.Api.Models.Optimization
         public int TotalItems { get; set; }
         public List<string> AggregatedItemIds { get; set; } = new();
         public List<string> AssignedRequestIds { get; set; } = new();
+        public List<string> Messages { get; set; } = new();
         public double Score { get; set; }
     }
 

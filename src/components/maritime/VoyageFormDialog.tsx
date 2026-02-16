@@ -18,22 +18,33 @@ import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
-import { Plus, Trash2 } from "lucide-react";
-import type { Vessel, Voyage, VoyageStop } from "../../types/maritime/marine";
+import { Plus, Trash2, Ship, Plane } from "lucide-react";
+import type {
+  UnifiedVessel,
+  UnifiedVoyage,
+  VoyageStop,
+} from "../../types/maritime/marine";
+import type { Flight } from "../../types/aviation/flight";
 import { getVessels } from "../../services/maritime/vesselService";
+import { getHelicopters } from "../../services/maritime/helicopterService";
 import {
   createVoyage,
   updateVoyage,
 } from "../../services/maritime/voyageService";
+import {
+  createFlight,
+  updateFlight,
+} from "../../services/maritime/flightService";
 import { getLocations } from "../../services/maritime/locationService";
 import type { Location } from "../../types/maritime/logistics";
 import { toast } from "react-toastify";
 
 interface VoyageFormDialogProps {
   open: boolean;
-  initialData?: Voyage;
+  initialData?: UnifiedVoyage | Flight; // Updated type to include Flight
   onClose: () => void;
-  onSuccess: (newVoyage: Voyage) => void;
+  onSuccess: (newVoyage: UnifiedVoyage | Flight) => void; // Updated type
+  isAviation?: boolean;
 }
 
 export function VoyageFormDialog({
@@ -41,8 +52,9 @@ export function VoyageFormDialog({
   initialData,
   onClose,
   onSuccess,
+  isAviation = false,
 }: VoyageFormDialogProps) {
-  const [vessels, setVessels] = useState<Vessel[]>([]);
+  const [vessels, setVessels] = useState<UnifiedVessel[]>([]);
   const [formData, setFormData] = useState({
     vesselId: "",
     origin: "",
@@ -55,16 +67,29 @@ export function VoyageFormDialog({
 
   useEffect(() => {
     if (open) {
-      getVessels().then(setVessels);
+      if (isAviation) {
+        getHelicopters().then(setVessels);
+      } else {
+        getVessels().then(setVessels);
+      }
       getLocations().then(setLocations);
       if (initialData) {
         setFormData({
-          vesselId: initialData.vesselId,
-          origin: initialData.originId || (initialData as any).origin || "",
+          vesselId:
+            (initialData as any).vesselId ||
+            (initialData as any).helicopterId ||
+            "",
+          origin:
+            (initialData as any).originId || (initialData as any).origin || "",
           destination:
-            initialData.destinationId || (initialData as any).destination || "",
+            (initialData as any).destinationId ||
+            (initialData as any).destination ||
+            "",
           departureDateTime: dayjs(initialData.departureDateTime),
-          eta: dayjs(initialData.eta),
+          eta: dayjs(
+            (initialData as Voyage).eta ||
+              (initialData as Flight).arrivalDateTime,
+          ),
         });
         setStops(initialData.stops || []);
       } else {
@@ -78,7 +103,7 @@ export function VoyageFormDialog({
         setStops([]);
       }
     }
-  }, [open, initialData]);
+  }, [open, initialData, isAviation]);
 
   const handleAddStop = () => {
     const newStop: VoyageStop = {
@@ -119,44 +144,83 @@ export function VoyageFormDialog({
     }
 
     if (formData.eta.isBefore(formData.departureDateTime)) {
-      toast.error("ETA cannot be before Departure time");
+      toast.error(
+        isAviation
+          ? "Arrival Time cannot be before Departure time"
+          : "ETA cannot be before Departure time",
+      );
       return;
     }
 
     const selectedVessel = vessels.find(
-      (v) => v.vesselId === formData.vesselId,
+      (v) =>
+        ((v as any).vesselId || (v as any).helicopterId) === formData.vesselId,
     );
+    const vesselName =
+      (selectedVessel as any)?.vesselName ||
+      (selectedVessel as any)?.helicopterName;
 
     try {
       if (initialData) {
-        const updated = await updateVoyage({
-          ...initialData,
-          vesselId: formData.vesselId,
-          vesselName: selectedVessel?.vesselName || initialData.vesselName,
-          originId: formData.origin,
-          destinationId: formData.destination,
-          departureDateTime: formData.departureDateTime.toISOString(),
-          eta: formData.eta.toISOString(),
-          stops: stops,
-        });
-        toast.success("Voyage updated successfully");
-        onSuccess(updated);
+        if (isAviation) {
+          const updated = await updateFlight({
+            ...initialData,
+            helicopterId: formData.vesselId,
+            helicopterName: vesselName || (initialData as any).helicopterName,
+            originId: formData.origin,
+            destinationId: formData.destination,
+            departureDateTime: formData.departureDateTime.toISOString(),
+            arrivalDateTime: formData.eta.toISOString(),
+            stops: stops as any,
+          } as any);
+          toast.success("Flight updated successfully");
+          onSuccess(updated as any);
+        } else {
+          const updated = await updateVoyage({
+            ...initialData,
+            vesselId: formData.vesselId,
+            vesselName: vesselName || (initialData as any).vesselName,
+            originId: formData.origin,
+            destinationId: formData.destination,
+            departureDateTime: formData.departureDateTime.toISOString(),
+            eta: formData.eta.toISOString(),
+            stops: stops,
+          } as any);
+          toast.success("Voyage updated successfully");
+          onSuccess(updated as any);
+        }
       } else {
-        const newVoyage = await createVoyage({
-          vesselId: formData.vesselId,
-          originId: formData.origin,
-          destinationId: formData.destination,
-          departureDateTime: formData.departureDateTime.toISOString(),
-          eta: formData.eta.toISOString(),
-          stops: stops,
-        });
-        toast.success("Voyage created successfully");
-        onSuccess(newVoyage);
+        if (isAviation) {
+          const newFlight = await createFlight({
+            helicopterId: formData.vesselId,
+            originId: formData.origin,
+            destinationId: formData.destination,
+            departureDateTime: formData.departureDateTime.toISOString(),
+            arrivalDateTime: formData.eta.toISOString(),
+            stops: stops as any,
+          } as any);
+          toast.success("Flight created successfully");
+          onSuccess(newFlight as any);
+        } else {
+          const newVoyage = await createVoyage({
+            vesselId: formData.vesselId,
+            originId: formData.origin,
+            destinationId: formData.destination,
+            departureDateTime: formData.departureDateTime.toISOString(),
+            eta: formData.eta.toISOString(),
+            stops: stops,
+          });
+          toast.success("Voyage created successfully");
+          onSuccess(newVoyage);
+        }
       }
       onClose();
     } catch (error) {
+      const entity = isAviation ? "flight" : "voyage";
       toast.error(
-        initialData ? "Failed to update voyage" : "Failed to create voyage",
+        initialData
+          ? `Failed to update ${entity}`
+          : `Failed to create ${entity}`,
       );
     }
   };
@@ -184,13 +248,20 @@ export function VoyageFormDialog({
   };
 
   const selectedVesselObj = vessels.find(
-    (v) => v.vesselId === formData.vesselId,
+    (v) =>
+      ((v as any).vesselId || (v as any).helicopterId) === formData.vesselId,
   );
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle sx={{ fontWeight: 600, fontSize: "1.1rem" }}>
-        {initialData ? "Edit Voyage" : "Create New Voyage"}
+        {initialData
+          ? isAviation
+            ? "Edit Flight"
+            : "Edit Voyage"
+          : isAviation
+            ? "Create New Flight"
+            : "Create New Voyage"}
       </DialogTitle>
       <DialogContent dividers>
         <Grid container spacing={3} sx={{ mt: 0.5 }}>
@@ -198,7 +269,7 @@ export function VoyageFormDialog({
             <TextField
               select
               fullWidth
-              label="Vessel"
+              label={isAviation ? "Helicopter" : "Vessel"}
               value={formData.vesselId}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
                 setFormData({ ...formData, vesselId: e.target.value })
@@ -206,34 +277,43 @@ export function VoyageFormDialog({
               size="small"
               sx={inputSx}
             >
-              {vessels.map((v: Vessel) => (
-                <MenuItem key={v.vesselId} value={v.vesselId} sx={menuItemSx}>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      width: "100%",
-                    }}
-                  >
-                    <span>{v.vesselName}</span>
-                    {v.statusId && (
-                      <Chip
-                        label={v.statusId}
-                        size="small"
-                        sx={{
-                          height: 16,
-                          fontSize: 9,
-                          fontWeight: 600,
-                          textTransform: "uppercase",
-                          borderRadius: "4px",
-                          ...getStatusStyle(v.statusId),
-                        }}
-                      />
-                    )}
-                  </Box>
-                </MenuItem>
-              ))}
+              {vessels.map((v: any, vIdx: number) => {
+                const vid = v.vesselId || v.helicopterId;
+                const vname = v.vesselName || v.helicopterName;
+                return (
+                  <MenuItem key={vid || vIdx} value={vid} sx={menuItemSx}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        width: "100%",
+                      }}
+                    >
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        {isAviation ? <Plane size={14} /> : <Ship size={14} />}
+                        <span>{vname}</span>
+                      </Box>
+                      {v.statusId && (
+                        <Chip
+                          label={v.statusId}
+                          size="small"
+                          sx={{
+                            height: 16,
+                            fontSize: 9,
+                            fontWeight: 600,
+                            textTransform: "uppercase",
+                            borderRadius: "4px",
+                            ...getStatusStyle(v.statusId),
+                          }}
+                        />
+                      )}
+                    </Box>
+                  </MenuItem>
+                );
+              })}
             </TextField>
           </Grid>
 
@@ -259,7 +339,9 @@ export function VoyageFormDialog({
                     fontSize: "0.7rem",
                   }}
                 >
-                  VESSEL SPECIFICATIONS
+                  {isAviation
+                    ? "AIRCRAFT SPECIFICATIONS"
+                    : "VESSEL SPECIFICATIONS"}
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 4 }}>
@@ -275,8 +357,10 @@ export function VoyageFormDialog({
                       variant="body2"
                       sx={{ fontSize: "0.875rem", mt: 0.5 }}
                     >
-                      {selectedVesselObj.capacities?.deadWeight?.toLocaleString() ||
-                        "-"}{" "}
+                      {(
+                        (selectedVesselObj as any).capacities?.deadWeight ||
+                        (selectedVesselObj as any).capacities?.maxPayload
+                      )?.toLocaleString() || "-"}{" "}
                       t
                     </Typography>
                     <Typography
@@ -284,9 +368,11 @@ export function VoyageFormDialog({
                       color="var(--muted)"
                       sx={{ fontSize: "0.75rem" }}
                     >
-                      {selectedVesselObj.capacities?.deckArea?.toLocaleString() ||
-                        "-"}{" "}
-                      m² Deck
+                      {(
+                        (selectedVesselObj as any).capacities?.deckArea ||
+                        (selectedVesselObj as any).capacities?.cabinPayload
+                      )?.toLocaleString() || "-"}{" "}
+                      {isAviation ? "kg Cabin" : "m² Deck"}
                     </Typography>
                   </Grid>
                   <Grid size={{ xs: 4 }}>
@@ -296,14 +382,16 @@ export function VoyageFormDialog({
                       display="block"
                       sx={{ fontSize: "0.7rem", fontWeight: 600 }}
                     >
-                      COMPLEMENT
+                      COMPLEMENT / SEATS
                     </Typography>
                     <Typography
                       variant="body2"
                       sx={{ fontSize: "0.875rem", mt: 0.5 }}
                     >
-                      {selectedVesselObj.capacities?.totalComplement || "-"}{" "}
-                      Persons
+                      {(selectedVesselObj as any).capacities?.totalComplement ||
+                        (selectedVesselObj as any).passengerSeats ||
+                        "-"}{" "}
+                      {isAviation ? "Seats" : "Persons"}
                     </Typography>
                   </Grid>
                   <Grid size={{ xs: 4 }}>
@@ -319,14 +407,17 @@ export function VoyageFormDialog({
                       variant="body2"
                       sx={{ fontSize: "0.875rem", mt: 0.5 }}
                     >
-                      {selectedVesselObj.performance?.serviceSpeed || "-"} kts
+                      {(selectedVesselObj as any).performance?.serviceSpeed ||
+                        (selectedVesselObj as any).performance?.cruiseSpeed ||
+                        "-"}{" "}
+                      kts
                     </Typography>
                     <Typography
                       variant="caption"
                       color="var(--muted)"
                       sx={{ fontSize: "0.75rem" }}
                     >
-                      Service Speed
+                      {isAviation ? "Cruise Speed" : "Service Speed"}
                     </Typography>
                   </Grid>
                 </Grid>
@@ -404,7 +495,7 @@ export function VoyageFormDialog({
             </Grid>
             <Grid size={{ xs: 6 }}>
               <DateTimePicker
-                label="ETA"
+                label={isAviation ? "Arrival Time" : "ETA"}
                 value={formData.eta}
                 onChange={(newValue) =>
                   setFormData({ ...formData, eta: newValue || dayjs() })
@@ -548,7 +639,13 @@ export function VoyageFormDialog({
           Cancel
         </Button>
         <Button onClick={handleSubmit} variant="contained" color="primary">
-          {initialData ? "Update Voyage" : "Create Voyage"}
+          {initialData
+            ? isAviation
+              ? "Update Flight"
+              : "Update Voyage"
+            : isAviation
+              ? "Create Flight"
+              : "Create Voyage"}
         </Button>
       </DialogActions>
     </Dialog>

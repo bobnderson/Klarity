@@ -1,3 +1,8 @@
+import type { Flight } from "../aviation/flight";
+
+export type UnifiedVessel = Vessel | Helicopter;
+export type UnifiedVoyage = Voyage | Flight;
+
 export const CARGO_TYPE_CONFIG: Record<
   string,
   { label: string; color: string }
@@ -29,6 +34,9 @@ export interface Voyage {
   statusName?: string;
   statusColor?: string;
   tags?: string[];
+  costPerPax?: number;
+  paxCapacity?: number;
+  paxCurrent?: number;
   cargoDistribution: VoyageCargo[];
   stops?: VoyageStop[];
 }
@@ -61,14 +69,14 @@ export interface Vessel {
   vesselTypeId?: string;
   vesselCategoryId?: string;
   capacities?: {
-    fuelOil: number; // m3
-    potableWater: number; // m3
-    drillWater: number; // m3
-    liquidMud: number; // m3
-    dryBulkMud: number; // m3
+    fuelOil?: number; // m3
+    potableWater?: number; // m3
+    drillWater?: number; // m3
+    liquidMud?: number; // m3
+    dryBulkMud?: number; // m3
     deadWeight: number; // tonnes
     deckArea: number; // m2
-    deckLoading: number; // tonnes/m2
+    deckLoading?: number; // tonnes/m2
     totalComplement?: number; // pax
   };
   particulars?: {
@@ -86,6 +94,37 @@ export interface Vessel {
     hourlyOperatingCost: number;
     fuelConsumptionRate: number;
     mobilisationCost: number;
+  };
+}
+
+export interface Helicopter {
+  helicopterId: string;
+  helicopterName: string;
+
+  // Compatibility aliases
+  vesselId: string;
+  vesselName: string;
+  voyages: import("../aviation/flight").Flight[];
+
+  helicopterTypeId?: string;
+  statusId?: string;
+  cruiseAirspeedKts?: number;
+  basicOperatingWeightLb?: number;
+  maxGrossWeightLb?: number;
+  availablePayloadLb?: number;
+  maxFuelGal?: number;
+  maxFuelLb?: number;
+  enduranceHours?: number;
+  rangeNm?: number;
+  passengerSeats?: number;
+  status?: string;
+  helicopterTypeName?: string;
+  owner?: string;
+
+  // Needed for utilization calculations in shared components
+  capacities?: {
+    deadWeight: number; // For helicopters, this maps to payload
+    deckArea: number; // For helicopters, this might be cabin space/floor area
   };
 }
 
@@ -152,5 +191,6 @@ export interface VoyageCandidate {
   totalItems: number;
   aggregatedItemIds: string[];
   assignedRequestIds: string[];
+  messages?: string[];
   score: number;
 }

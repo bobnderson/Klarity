@@ -1,15 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Box, CircularProgress, IconButton, Tooltip } from "@mui/material";
 import { LayoutList, GanttChartSquare, Lightbulb, Plus } from "lucide-react";
-import type { Dayjs } from "dayjs";
+import dayjs, { Dayjs } from "dayjs";
 import { VesselTrack } from "./VesselTrack";
 import { VoyageTimelineGantt } from "./VoyageTimelineGantt";
 import { VoyageManifestDialog } from "./VoyageManifestDialog";
 import { VoyageFormDialog } from "./VoyageFormDialog";
-import type { Vessel, Voyage } from "../../types/maritime/marine";
+import type { UnifiedVessel, UnifiedVoyage } from "../../types/maritime/marine";
 
 interface VoyageTimelineProps {
-  vessels: Vessel[];
+  vessels: UnifiedVessel[];
   activeCargoTypes: {
     type: string;
     label: string | undefined;
@@ -47,23 +47,55 @@ export function VoyageTimeline({
   const [isManifestOpen, setIsManifestOpen] = useState(false);
   const [isVoyageFormOpen, setIsVoyageFormOpen] = useState(false);
   const [selectedManifestVoyage, setSelectedManifestVoyage] = useState<
-    Voyage | undefined
+    UnifiedVoyage | undefined
   >();
   const [selectedManifestVessel, setSelectedManifestVessel] = useState<
-    Vessel | undefined
+    UnifiedVessel | undefined
   >();
-  const [editingVoyage, setEditingVoyage] = useState<Voyage | undefined>();
+  const [editingVoyage, setEditingVoyage] = useState<
+    UnifiedVoyage | undefined
+  >();
 
-  const handleOpenManifest = (voyage: Voyage, vessel: Vessel) => {
+  const handleOpenManifest = (voyage: UnifiedVoyage, vessel: UnifiedVessel) => {
     setSelectedManifestVoyage(voyage);
     setSelectedManifestVessel(vessel);
     setIsManifestOpen(true);
   };
 
-  const handleEditVoyage = (voyage: Voyage) => {
+  const handleEditVoyage = (voyage: UnifiedVoyage) => {
     setEditingVoyage(voyage);
     setIsVoyageFormOpen(true);
   };
+
+  const avgDeckUtil = useMemo(() => {
+    if (!startDate || !endDate) return 0;
+
+    let totalUtil = 0;
+    let count = 0;
+
+    vessels.forEach((vessel) => {
+      vessel.voyages.forEach((voyage) => {
+        const dep = dayjs(voyage.departureDateTime);
+        const isCancelled =
+          voyage.statusId === "cancelled" ||
+          voyage.statusName?.toLowerCase() === "cancelled";
+
+        if (
+          !isCancelled &&
+          (dep.isAfter(startDate) || dep.isSame(startDate)) &&
+          (dep.isBefore(endDate) || dep.isSame(endDate))
+        ) {
+          // Use deckUtil or payloadUtil/cabinUtil depending on what's available
+          const util =
+            (voyage as any).deckUtil ?? (voyage as any).payloadUtil ?? 0;
+          totalUtil += util;
+          count++;
+        }
+      });
+    });
+
+    return count > 0 ? totalUtil / count : 0;
+  }, [vessels, startDate, endDate]);
 
   const dateRangeLabel =
     startDate && endDate
@@ -72,10 +104,11 @@ export function VoyageTimeline({
 
   return (
     <Box component="section" className="panel-container" sx={{ minWidth: 0 }}>
+      {/* HEADER */}
       <Box className="panel-header-custom">
         <Box className="panel-title-custom">
           <span className="panel-title-dot"></span>
-          <span>Voyage Timeline</span>
+          <span>Timeline</span>
         </Box>
         <Box
           sx={{
@@ -149,7 +182,7 @@ export function VoyageTimeline({
                 <GanttChartSquare size={18} />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Create Voyage" arrow>
+            <Tooltip title="Create Entry" arrow>
               <IconButton
                 size="small"
                 onClick={() => setIsVoyageFormOpen(true)}
@@ -194,9 +227,34 @@ export function VoyageTimeline({
           color: "var(--muted)",
           borderBottom: "1px solid var(--border)",
           pb: 1,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
         }}
       >
         <span>{dateRangeLabel}</span>
+        {avgDeckUtil > 0 && (
+          <Tooltip title="Average Utilization for selected horizon">
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <span style={{ fontWeight: 600, color: "var(--text)" }}>
+                Avg Util:
+              </span>
+              <span
+                style={{
+                  color:
+                    avgDeckUtil > 85
+                      ? "var(--danger)"
+                      : avgDeckUtil > 50
+                        ? "var(--success)"
+                        : "var(--warning)",
+                  fontWeight: 700,
+                }}
+              >
+                {avgDeckUtil.toFixed(1)}%
+              </span>
+            </Box>
+          </Tooltip>
+        )}
       </Box>
       <Box
         className={`panel-body-scroll ${viewMode === "list" ? "voyage-timeline-scroll-area" : ""}`}
@@ -204,7 +262,7 @@ export function VoyageTimeline({
           display: "flex",
           flexDirection: "column",
           flex: 1,
-          overflow: viewMode === "list" ? "auto" : "hidden", // Let Gantt child handle its own scroll
+          overflow: viewMode === "list" ? "auto" : "hidden",
         }}
       >
         {isLoading ? (
@@ -223,7 +281,11 @@ export function VoyageTimeline({
           <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {vessels.map((vessel, vIdx) => (
               <VesselTrack
-                key={vessel.vesselId || vIdx}
+                key={
+                  (vessel as any).vesselId ||
+                  (vessel as any).helicopterId ||
+                  vIdx
+                }
                 vessel={vessel}
                 selectedVoyageId={selectedVoyageId}
                 onSelectVoyage={onSelectVoyage}
@@ -237,7 +299,7 @@ export function VoyageTimeline({
           </Box>
         ) : (
           <VoyageTimelineGantt
-            vessels={vessels}
+            vessels={vessels as any}
             startDate={startDate}
             endDate={endDate}
             onSelectVoyage={onSelectVoyage}
@@ -248,15 +310,15 @@ export function VoyageTimeline({
 
       <VoyageManifestDialog
         open={isManifestOpen}
-        voyage={selectedManifestVoyage}
-        vessel={selectedManifestVessel}
+        voyage={selectedManifestVoyage as any}
+        vessel={selectedManifestVessel as any}
         onClose={() => setIsManifestOpen(false)}
         onUpdate={onVoyageUpdated}
       />
 
       <VoyageFormDialog
         open={isVoyageFormOpen}
-        initialData={editingVoyage}
+        initialData={editingVoyage as any}
         onClose={() => {
           setIsVoyageFormOpen(false);
           setEditingVoyage(undefined);

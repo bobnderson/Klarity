@@ -29,6 +29,7 @@ import type {
   VoyageRecommendation,
 } from "../services/maritime/recommendationService";
 import { toast } from "react-toastify";
+import { LoadingIndicator } from "../components/common/LoadingIndicator";
 
 export function MarinePlanner() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
@@ -442,6 +443,7 @@ export function MarinePlanner() {
     <Box
       className="app-shell"
       sx={{
+        p: 0,
         height: "calc(100vh - 64px)",
         display: "flex",
         flexDirection: "column",
@@ -468,18 +470,20 @@ export function MarinePlanner() {
         />
       </Box>
 
+      {isLoading && <LoadingIndicator />}
+
       {/* SCROLL CONTAINER */}
       <Box
         component="main"
         className="main-grid"
         sx={{
+          p: 1.25,
           flex: 1,
           minHeight: 0,
           overflowY: "auto",
           display: "flex",
           flexDirection: "column",
           gap: 1.25,
-          p: 1.25,
         }}
       >
         {/* MIDDLE ROW */}

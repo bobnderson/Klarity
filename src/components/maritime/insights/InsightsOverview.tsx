@@ -279,8 +279,8 @@ export function InsightsOverview({
 
               <Box
                 sx={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr auto",
+                  display: "flex",
+                  justifyContent: "space-between",
                   alignItems: "center",
                   gap: 1,
                   bgcolor: "var(--bg)",
@@ -289,7 +289,14 @@ export function InsightsOverview({
                   border: "1px solid var(--border)",
                 }}
               >
-                <Box sx={{ display: "flex", flexDirection: "column" }}>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
+                    minWidth: 0,
+                    flex: 1.5,
+                  }}
+                >
                   <span style={{ fontSize: 10, color: "var(--muted)" }}>
                     Vessel
                   </span>
@@ -301,7 +308,31 @@ export function InsightsOverview({
                   sx={{
                     display: "flex",
                     flexDirection: "column",
+                    minWidth: 0,
+                    flex: 1.5,
+                  }}
+                >
+                  <span style={{ fontSize: 10, color: "var(--muted)" }}>
+                    {dayjs(rec.departureDateTime).format("DD MMM")} |{" "}
+                    {dayjs(rec.eta).format("DD MMM")}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 500,
+                      visibility: "hidden",
+                    }}
+                  >
+                    spacer
+                  </span>
+                </Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    flexDirection: "column",
                     alignItems: "flex-end",
+                    minWidth: 0,
+                    flex: 1,
                   }}
                 >
                   <span style={{ fontSize: 10, color: "var(--muted)" }}>
@@ -318,6 +349,41 @@ export function InsightsOverview({
                   </span>
                 </Box>
               </Box>
+
+              {/* Recommendation Messages / Warnings */}
+              {rec.messages && rec.messages.length > 0 && (
+                <Box
+                  sx={{
+                    mt: 1,
+                    p: 1,
+                    bgcolor: "#fff7ed",
+                    borderRadius: 1,
+                    border: "1px solid #fed7aa",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 0.5,
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {rec.messages.map((msg, idx) => (
+                    <Box
+                      key={idx}
+                      sx={{ display: "flex", gap: 0.75, alignItems: "start" }}
+                    >
+                      <AlertTriangle
+                        size={12}
+                        color="#ea580c"
+                        style={{ marginTop: 2, flexShrink: 0 }}
+                      />
+                      <Typography
+                        sx={{ fontSize: 10, color: "#9a3412", lineHeight: 1.4 }}
+                      >
+                        {msg}
+                      </Typography>
+                    </Box>
+                  ))}
+                </Box>
+              )}
 
               <Collapse in={isExpanded} timeout="auto" unmountOnExit>
                 <Box

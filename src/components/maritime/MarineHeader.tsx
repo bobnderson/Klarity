@@ -22,6 +22,8 @@ interface MarineHeaderProps {
   onOptimize: () => void;
   onCompareScenarios: () => void;
   onRefresh?: () => void;
+  title?: string;
+  hideActions?: boolean;
 }
 
 export function MarineHeader({
@@ -38,9 +40,11 @@ export function MarineHeader({
   onOptimize,
   onCompareScenarios,
   onRefresh,
+  title = "Marine Planner",
+  hideActions = false,
 }: MarineHeaderProps) {
   return (
-    <header className="top-nav">
+    <Box component="header" className="top-nav" sx={{ mx: 1.25, mt: 1.25 }}>
       <Box className="top-nav-left">
         <Box className="brand">
           <span className="brand-pill"></span>
@@ -49,7 +53,7 @@ export function MarineHeader({
             component="span"
             sx={{ fontSize: 16, fontWeight: 600, letterSpacing: "0.04em" }}
           >
-            Marine Planner
+            {title}
           </Typography>
         </Box>
 
@@ -99,18 +103,22 @@ export function MarineHeader({
         )}
 
         {/* <button className="btn-ghost-custom">Save Version</button> */}
-        <button className="btn-ghost-custom" onClick={onCompareScenarios}>
-          Compare Scenarios
-        </button>
-        <button className="btn btn-primary-gradient" onClick={onOptimize}>
-          Optimise Plan
-        </button>
+        {!hideActions && (
+          <>
+            <button className="btn-ghost-custom" onClick={onCompareScenarios}>
+              Compare Scenarios
+            </button>
+            <button className="btn btn-primary-gradient" onClick={onOptimize}>
+              Optimise Plan
+            </button>
+          </>
+        )}
 
         {/* <Box className="notif-btn">
           <Bell size={14} />
           <span className="notif-dot"></span>
         </Box> */}
       </Box>
-    </header>
+    </Box>
   );
 }

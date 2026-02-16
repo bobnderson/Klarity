@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("klarity.api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ee995e37b0a9b5e4ff1b5a4d8417f49430a7622a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b2eabd8fe88e3824bc236de738d8787e08e3c43a")]
 [assembly: System.Reflection.AssemblyProductAttribute("klarity.api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("klarity.api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

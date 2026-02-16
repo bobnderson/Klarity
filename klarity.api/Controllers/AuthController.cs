@@ -112,7 +112,7 @@ public class AuthController : ControllerBase
 
     private List<MenuItemConfig> BuildHierarchicalMenu(IEnumerable<dynamic> flatMenus)
     {
-        return flatMenus
+        var menus = flatMenus
             .GroupBy(m => (string)m.GroupLabel)
             .Select(g => new MenuItemConfig
             {
@@ -123,6 +123,39 @@ public class AuthController : ControllerBase
                     Path = (string)c.ItemPath
                 }).ToList()
             }).ToList();
+
+        // Inject Aviation Menu for Development/Demo
+        var aviationMenu = menus.FirstOrDefault(m => m.Label == "Aviation");
+        var aviationItems = new List<MenuItemConfig>
+        {
+            new MenuItemConfig { Label = "Dashboard", Path = "/aviation-dashboard" },
+            new MenuItemConfig { Label = "Planner", Path = "/aviation-planner" },
+            new MenuItemConfig { Label = "Request", Path = "/aviation-request" },
+            new MenuItemConfig { Label = "Helicopters", Path = "/aviation-helicopters" },
+            new MenuItemConfig { Label = "Schedules", Path = "/aviation-schedules" }
+        };
+
+        if (aviationMenu != null)
+        {
+            // Add items that aren't already there
+            foreach (var item in aviationItems)
+            {
+                if (!aviationMenu.Children.Any(c => c.Label == item.Label))
+                {
+                    aviationMenu.Children.Add(item);
+                }
+            }
+        }
+        else
+        {
+            menus.Add(new MenuItemConfig
+            {
+                Label = "Aviation",
+                Children = aviationItems
+            });
+        }
+
+        return menus;
     }
 
     private string GenerateJwtToken(string accountId, List<UserRoleConfig> roles)

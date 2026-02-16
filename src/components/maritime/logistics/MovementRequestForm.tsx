@@ -64,25 +64,27 @@ export function MovementRequestForm({
   );
 
   const [formData, setFormData] = useState<MovementRequest>(
-    initialData || {
-      requestId: `MR-${Date.now()}`,
-      requestDate: new Date().toISOString(),
-      status: "Draft",
-      originId: "",
-      destinationId: "",
-      earliestDeparture: "",
-      latestDeparture: "",
-      earliestArrival: "",
-      latestArrival: "",
-      items: [],
-      requestedBy: user?.accountId || "Unknown User",
-      urgencyId: "routine-operations",
-      scheduleIndicator: "Unscheduled",
-      isHazardous: false,
-      transportationRequired: false,
-      lifting: "Normal",
-      notify: [],
-    },
+    initialData
+      ? { ...initialData }
+      : {
+          requestId: `MR-${Date.now()}`,
+          requestDate: dayjs().toISOString(),
+          status: "Draft",
+          originId: "",
+          destinationId: "",
+          earliestDeparture: dayjs().toISOString(),
+          latestDeparture: dayjs().add(2, "days").toISOString(),
+          earliestArrival: dayjs().add(12, "hours").toISOString(),
+          latestArrival: dayjs().add(3, "days").toISOString(),
+          items: [],
+          requestedBy: user?.accountId || "Unknown User",
+          urgencyId: "routine-operations",
+          scheduleIndicator: "Unscheduled",
+          isHazardous: false,
+          transportationRequired: false,
+          lifting: "Normal",
+          notify: [],
+        },
   );
 
   const [availableRoutes, setAvailableRoutes] = useState<Route[]>([]);
@@ -131,7 +133,9 @@ export function MovementRequestForm({
         setBusinessUnits(bus);
         setItemCategories(categories);
         setItemTypes(iTypes);
-        setUomUnits(uoms.map((u: UnitOfMeasurementOption) => u.unitLabel));
+        setUomUnits(
+          (uoms || []).map((u: UnitOfMeasurementOption) => u.unitLabel),
+        );
       } catch (error) {
         console.error("Failed to load reference data", error);
       } finally {
@@ -160,11 +164,11 @@ export function MovementRequestForm({
       weightUnit: "tonnes",
       isHazardous: false,
     };
-    handleFormUpdate("items", [...formData.items, newItem]);
+    handleFormUpdate("items", [...(formData.items || []), newItem]);
   };
 
   const handleRemoveItem = (index: number) => {
-    const newItems = [...formData.items];
+    const newItems = [...(formData.items || [])];
     newItems.splice(index, 1);
     handleFormUpdate("items", newItems);
   };
@@ -174,7 +178,7 @@ export function MovementRequestForm({
     field: keyof MovementRequestItem,
     value: any,
   ) => {
-    const newItems = [...formData.items];
+    const newItems = [...(formData.items || [])];
     if (field === "categoryId" && value !== newItems[index].categoryId) {
       newItems[index] = { ...newItems[index], [field]: value, itemTypeId: "" };
     } else {
@@ -236,7 +240,7 @@ export function MovementRequestForm({
       });
 
       if (newItems.length > 0) {
-        handleFormUpdate("items", [...formData.items, ...newItems]);
+        handleFormUpdate("items", [...(formData.items || []), ...newItems]);
       }
     };
     reader.readAsText(file);
@@ -414,7 +418,7 @@ export function MovementRequestForm({
                   size="small"
                   className="compact-form-field"
                 >
-                  {requestTypes.map((type) => (
+                  {(requestTypes || []).map((type) => (
                     <MenuItem
                       key={type.requestTypeId}
                       value={type.requestTypeId}
@@ -439,7 +443,7 @@ export function MovementRequestForm({
                   size="small"
                   className="compact-form-field"
                 >
-                  {urgencyOptions.map((u) => (
+                  {(urgencyOptions || []).map((u) => (
                     <MenuItem
                       key={u.urgencyId}
                       value={u.urgencyId}
@@ -513,7 +517,7 @@ export function MovementRequestForm({
                   size="small"
                   className="compact-form-field"
                 >
-                  {businessUnits.map((bu) => (
+                  {(businessUnits || []).map((bu) => (
                     <MenuItem
                       key={bu.businessUnitId}
                       value={bu.businessUnitId}
@@ -540,7 +544,7 @@ export function MovementRequestForm({
                 >
                   {businessUnits
                     .find((b) => b.businessUnitId === formData.businessUnitId)
-                    ?.costCentres.map((cc) => (
+                    ?.costCentres?.map((cc) => (
                       <MenuItem
                         key={cc.code}
                         value={cc.code}
@@ -657,7 +661,7 @@ export function MovementRequestForm({
                   size="small"
                   className="compact-form-field"
                 >
-                  {availableRoutes.map((route) => (
+                  {(availableRoutes || []).map((route) => (
                     <MenuItem
                       key={route.routeId}
                       value={route.routeId}
@@ -708,7 +712,7 @@ export function MovementRequestForm({
                   size="small"
                   className="compact-form-field"
                 >
-                  {availableRoutes.map((route) => (
+                  {(availableRoutes || []).map((route) => (
                     <MenuItem
                       key={route.routeId}
                       value={route.routeId}
@@ -887,7 +891,7 @@ export function MovementRequestForm({
 
               <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                 <Typography variant="caption" color="text.secondary">
-                  {formData.items.length} items
+                  {(formData.items || []).length} items
                 </Typography>
                 <Button
                   component="label"
@@ -915,7 +919,7 @@ export function MovementRequestForm({
               </Box>
             </Box>
 
-            {formData.items.map((item, index) => (
+            {(formData.items || []).map((item, index) => (
               <Paper
                 key={item.itemId}
                 variant="outlined"
@@ -1004,7 +1008,7 @@ export function MovementRequestForm({
                       size="small"
                       className="compact-form-field"
                     >
-                      {itemCategories.map((type) => (
+                      {(itemCategories || []).map((type) => (
                         <MenuItem
                           key={type.categoryId}
                           value={type.categoryId}
@@ -1030,8 +1034,8 @@ export function MovementRequestForm({
                       disabled={!item.categoryId}
                       className="compact-form-field"
                     >
-                      {itemTypes
-                        .filter((it) => it.categoryId === item.categoryId)
+                      {(itemTypes || [])
+                        .filter((type) => type.categoryId === item.categoryId)
                         .map((type) => (
                           <MenuItem
                             key={type.typeId}
@@ -1080,7 +1084,7 @@ export function MovementRequestForm({
                       size="small"
                       className="compact-form-field"
                     >
-                      {uomUnits.map((unit) => (
+                      {(uomUnits || []).map((unit) => (
                         <MenuItem
                           key={unit}
                           value={unit}
@@ -1120,7 +1124,7 @@ export function MovementRequestForm({
                       size="small"
                       className="compact-form-field"
                     >
-                      {dimensionUnits.map((unit) => (
+                      {(dimensionUnits || []).map((unit) => (
                         <MenuItem
                           key={unit}
                           value={unit}
@@ -1164,7 +1168,7 @@ export function MovementRequestForm({
                       size="small"
                       className="compact-form-field"
                     >
-                      {weightUnits.map((unit) => (
+                      {(weightUnits || []).map((unit) => (
                         <MenuItem
                           key={unit}
                           value={unit}
@@ -1215,7 +1219,7 @@ export function MovementRequestForm({
                 </Grid>
               </Paper>
             ))}
-            {formData.items.length === 0 && (
+            {(formData.items || []).length === 0 && (
               <Box
                 sx={{
                   display: "flex",

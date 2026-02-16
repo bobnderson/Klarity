@@ -28,6 +28,9 @@ public class MovementRequest
     public DateTime? LatestDeparture { get; set; }
     public DateTime? EarliestArrival { get; set; }
     
+    public string? ReturnEarliestDeparture { get; set; }
+    public string? ReturnLatestArrival { get; set; }
+    
     [Required]
     public DateTime LatestArrival { get; set; }
     
@@ -55,6 +58,22 @@ public class MovementRequest
     public double TotalDeckArea { get; set; }
     public double TotalWeight { get; set; }
     
+    public bool IsDeleted { get; set; }
+    
+    public string TripType { get; set; } = "OneWay";
+    public string? SelectedVoyageId { get; set; }
+    public string? ReturnVoyageId { get; set; }
+    
+    public string? ApproverId { get; set; }
+    public DateTime? ApprovedAt { get; set; }
+    public string? ApproverComments { get; set; }
+    
+    // Scheduled Flight Times
+    public DateTime? ScheduledDeparture { get; set; }
+    public DateTime? ScheduledArrival { get; set; }
+    public DateTime? ReturnScheduledDeparture { get; set; }
+    public DateTime? ReturnScheduledArrival { get; set; }
+
     public List<MovementRequestItem> Items { get; set; } = new();
 }
 

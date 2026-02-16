@@ -23,16 +23,16 @@ public class VesselsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<Vessel>>> GetVessels()
+    public async Task<ActionResult<IEnumerable<Vessel>>> GetVessels([FromQuery] string? category = null, [FromQuery] string mode = "Marine")
     {
-        var vessels = await _vesselRepository.GetVesselsAsync();
+        var vessels = await _vesselRepository.GetVesselsAsync(category, mode);
         return Ok(vessels);
     }
 
     [HttpGet("{id}")]
-    public async Task<ActionResult<Vessel>> GetVessel(string id)
+    public async Task<ActionResult<Vessel>> GetVessel(string id, [FromQuery] string mode = "Marine")
     {
-        var vessel = await _vesselRepository.GetVesselByIdAsync(id);
+        var vessel = await _vesselRepository.GetVesselByIdAsync(id, mode);
         if (vessel == null) return NotFound();
         return Ok(vessel);
     }
@@ -52,31 +52,31 @@ public class VesselsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<Vessel>> CreateVessel(Vessel vessel)
+    public async Task<ActionResult<Vessel>> CreateVessel(Vessel vessel, [FromQuery] string mode = "Marine")
     {
         if (string.IsNullOrEmpty(vessel.VesselId))
         {
             vessel.VesselId = "v-" + Guid.NewGuid().ToString("n").Substring(0, 8);
         }
 
-        var existing = await _vesselRepository.GetVesselByIdAsync(vessel.VesselId);
+        var existing = await _vesselRepository.GetVesselByIdAsync(vessel.VesselId, mode);
         if (existing != null) return Conflict($"Vessel with ID '{vessel.VesselId}' already exists.");
 
-        await _vesselRepository.CreateVesselAsync(vessel);
-        var created = await _vesselRepository.GetVesselByIdAsync(vessel.VesselId);
+        await _vesselRepository.CreateVesselAsync(vessel, mode);
+        var created = await _vesselRepository.GetVesselByIdAsync(vessel.VesselId, mode);
         await _auditService.LogAsync(User.Identity?.Name ?? "system", "Create Vessel", true, "Vessels", System.Text.Json.JsonSerializer.Serialize(created ?? vessel));
-        return CreatedAtAction(nameof(GetVessel), new { id = vessel.VesselId }, created ?? vessel);
+        return CreatedAtAction(nameof(GetVessel), new { id = vessel.VesselId, mode = mode }, created ?? vessel);
     }
 
     [HttpPut("{id}")]
-    public async Task<ActionResult<Vessel>> UpdateVessel(string id, Vessel vessel)
+    public async Task<ActionResult<Vessel>> UpdateVessel(string id, Vessel vessel, [FromQuery] string mode = "Marine")
     {
         if (id != vessel.VesselId) return BadRequest("Path ID and Vessel ID mismatch.");
 
-        await _vesselRepository.UpdateVesselAsync(vessel);
+        await _vesselRepository.UpdateVesselAsync(vessel, mode);
         
         // Fetch the fully populated object to return
-        var updated = await _vesselRepository.GetVesselByIdAsync(id);
+        var updated = await _vesselRepository.GetVesselByIdAsync(id, mode);
         
         await _auditService.LogAsync(
             User.Identity?.Name ?? "system", 
@@ -90,9 +90,9 @@ public class VesselsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public async Task<IActionResult> DeleteVessel(string id, [FromBody] DeletionRequest? request)
+    public async Task<IActionResult> DeleteVessel(string id, [FromBody] DeletionRequest? request, [FromQuery] string mode = "Marine")
     {
-        await _vesselRepository.DeleteVesselAsync(id);
+        await _vesselRepository.DeleteVesselAsync(id, mode);
         await _auditService.LogAsync(
             User.Identity?.Name ?? "system", 
             "Delete Vessel", 

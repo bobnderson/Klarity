@@ -15,6 +15,8 @@ public class Role
 
     [MinLength(1, ErrorMessage = "At least one menu item must be selected")]
     public List<string> MenuItemIds { get; set; } = new();
+
+    public bool IsActive { get; set; } = true;
 }
 
 public class MenuItemOptionDto
@@ -36,4 +38,6 @@ public class CreateRoleDto
 
     [MinLength(1, ErrorMessage = "At least one menu item must be selected")]
     public List<string> MenuItemIds { get; set; } = new();
+
+    public bool IsActive { get; set; } = true;
 }

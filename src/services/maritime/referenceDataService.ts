@@ -29,8 +29,9 @@ export const getUnits = async (): Promise<UnitOfMeasurementOption[]> => {
   const response = await api.get<UnitOfMeasurementOption[]>(
     "MovementRequests/units",
   );
-  cache.set(UNITS_CACHE_KEY, response.data);
-  return response.data;
+  const data = Array.isArray(response.data) ? response.data : [];
+  cache.set(UNITS_CACHE_KEY, data);
+  return data;
 };
 
 export const getDimensionUnits = async (): Promise<string[]> => {
@@ -40,7 +41,9 @@ export const getDimensionUnits = async (): Promise<string[]> => {
   const response = await api.get<DimensionUnitOption[]>(
     "MovementRequests/dimension-units",
   );
-  const labels = response.data.map((u) => u.unitLabel);
+  const labels = Array.isArray(response.data)
+    ? response.data.map((u) => u.unitLabel)
+    : [];
   cache.set(DIMENSION_UNITS_CACHE_KEY, labels);
   return labels;
 };
@@ -52,7 +55,9 @@ export const getWeightUnits = async (): Promise<string[]> => {
   const response = await api.get<WeightUnitOption[]>(
     "MovementRequests/weight-units",
   );
-  const labels = response.data.map((u) => u.unitLabel);
+  const labels = Array.isArray(response.data)
+    ? response.data.map((u) => u.unitLabel)
+    : [];
   cache.set(WEIGHT_UNITS_CACHE_KEY, labels);
   return labels;
 };
@@ -66,19 +71,24 @@ export const getUrgencyOptions = async (): Promise<UrgencyOption[]> => {
   if (cached) return cached;
 
   const response = await api.get<UrgencyOption[]>("MovementRequests/urgencies");
-  cache.set(URGENCY_CACHE_KEY, response.data);
-  return response.data;
+  const data = Array.isArray(response.data) ? response.data : [];
+  cache.set(URGENCY_CACHE_KEY, data);
+  return data;
 };
 
-export const getRequestTypes = async (): Promise<RequestTypeOption[]> => {
-  const cached = cache.get<RequestTypeOption[]>(REQUEST_TYPE_CACHE_KEY);
+export const getRequestTypes = async (
+  mode: string = "Marine",
+): Promise<RequestTypeOption[]> => {
+  const cacheKey = `${REQUEST_TYPE_CACHE_KEY}_${mode}`;
+  const cached = cache.get<RequestTypeOption[]>(cacheKey);
   if (cached) return cached;
 
   const response = await api.get<RequestTypeOption[]>(
-    "MovementRequests/request-types",
+    `MovementRequests/request-types?mode=${mode}`,
   );
-  cache.set(REQUEST_TYPE_CACHE_KEY, response.data);
-  return response.data;
+  const data = Array.isArray(response.data) ? response.data : [];
+  cache.set(cacheKey, data);
+  return data;
 };
 
 export const getBusinessUnits = async (): Promise<BusinessUnitOption[]> => {
@@ -88,8 +98,9 @@ export const getBusinessUnits = async (): Promise<BusinessUnitOption[]> => {
   const response = await api.get<BusinessUnitOption[]>(
     "MovementRequests/business-units",
   );
-  cache.set(BUSINESS_UNIT_CACHE_KEY, response.data);
-  return response.data;
+  const data = Array.isArray(response.data) ? response.data : [];
+  cache.set(BUSINESS_UNIT_CACHE_KEY, data);
+  return data;
 };
 
 export const getVesselStatuses = async (): Promise<any[]> => {
@@ -97,8 +108,9 @@ export const getVesselStatuses = async (): Promise<any[]> => {
   if (cached) return cached;
 
   const response = await api.get<any[]>("vessels/statuses");
-  cache.set(VESSEL_STATUS_CACHE_KEY, response.data);
-  return response.data;
+  const data = Array.isArray(response.data) ? response.data : [];
+  cache.set(VESSEL_STATUS_CACHE_KEY, data);
+  return data;
 };
 
 export const getVoyageStatuses = async (): Promise<any[]> => {
@@ -106,8 +118,9 @@ export const getVoyageStatuses = async (): Promise<any[]> => {
   if (cached) return cached;
 
   const response = await api.get<any[]>("voyages/statuses");
-  cache.set(VOYAGE_STATUS_CACHE_KEY, response.data);
-  return response.data;
+  const data = Array.isArray(response.data) ? response.data : [];
+  cache.set(VOYAGE_STATUS_CACHE_KEY, data);
+  return data;
 };
 
 export const getItemCategories = async (): Promise<ItemCategoryOption[]> => {
@@ -117,8 +130,9 @@ export const getItemCategories = async (): Promise<ItemCategoryOption[]> => {
   const response = await api.get<ItemCategoryOption[]>(
     "MovementRequests/item-categories",
   );
-  cache.set(ITEM_CATEGORY_CACHE_KEY, response.data);
-  return response.data;
+  const data = Array.isArray(response.data) ? response.data : [];
+  cache.set(ITEM_CATEGORY_CACHE_KEY, data);
+  return data;
 };
 
 export const getItemTypes = async (): Promise<ItemTypeOption[]> => {
@@ -128,8 +142,9 @@ export const getItemTypes = async (): Promise<ItemTypeOption[]> => {
   const response = await api.get<ItemTypeOption[]>(
     "MovementRequests/item-types",
   );
-  cache.set(ITEM_TYPE_CACHE_KEY, response.data);
-  return response.data;
+  const data = Array.isArray(response.data) ? response.data : [];
+  cache.set(ITEM_TYPE_CACHE_KEY, data);
+  return data;
 };
 
 // Keeping this for backward compatibility if needed by other components

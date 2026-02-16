@@ -25,23 +25,28 @@ import {
   Circle,
   CheckCircle2,
   Trash2,
+  Plane,
 } from "lucide-react";
 import { CARGO_TYPE_CONFIG } from "../../types/maritime/marine";
-import type { Vessel, Voyage } from "../../types/maritime/marine";
+import type { UnifiedVessel, UnifiedVoyage } from "../../types/maritime/marine";
 import { getVoyageStatusStyle } from "../../utils/statusUtils";
 import { formatNumber } from "../../utils/formatters";
 import {
   updateVoyage,
   deleteVoyage,
 } from "../../services/maritime/voyageService";
+import {
+  updateFlight,
+  deleteFlight,
+} from "../../services/maritime/flightService";
 import { toast } from "react-toastify";
 
 interface VesselTrackProps {
-  vessel: Vessel;
+  vessel: UnifiedVessel;
   selectedVoyageId?: string;
   onSelectVoyage: (vesselId: string, voyageId: string) => void;
-  onOpenManifest: (voyage: Voyage, vessel: Vessel) => void;
-  onEditVoyage?: (voyage: Voyage, vessel: Vessel) => void;
+  onOpenManifest: (voyage: UnifiedVoyage, vessel: UnifiedVessel) => void;
+  onEditVoyage?: (voyage: UnifiedVoyage, vessel: UnifiedVessel) => void;
   onDropRequest?: (
     requestId: string,
     voyageId: string,
@@ -72,12 +77,17 @@ export function VesselTrack({
     null,
   );
   const [activeVoyageForStatus, setActiveVoyageForStatus] = useState<
-    Voyage | undefined
+    UnifiedVoyage | undefined
   >(undefined);
+
+  const isAviation = (vessel as any).helicopterId !== undefined;
+  const vesselId = (vessel as any).vesselId || (vessel as any).helicopterId;
+  const vesselName =
+    (vessel as any).vesselName || (vessel as any).helicopterName;
 
   const handleStatusClick = (
     event: React.MouseEvent<HTMLElement>,
-    voyage: Voyage,
+    voyage: UnifiedVoyage,
   ) => {
     event.stopPropagation();
     setActiveVoyageForStatus(voyage);
@@ -97,9 +107,8 @@ export function VesselTrack({
       setConfirmAction("cancel");
       setPendingStatusId(newStatusId);
       setConfirmDialogOpen(true);
-      setStatusMenuAnchor(null); // Close menu
+      setStatusMenuAnchor(null);
     } else {
-      // Direct update for non-destructive actions
       executeStatusUpdate(newStatusId);
     }
   };
@@ -116,9 +125,13 @@ export function VesselTrack({
 
     setIsLoading(true);
     try {
-      const updatedVoyage = { ...activeVoyageForStatus, statusId: statusId };
-      await updateVoyage(updatedVoyage);
-      toast.success(`Voyage status updated to ${statusId}`);
+      const updated = { ...activeVoyageForStatus, statusId: statusId };
+      if (isAviation) {
+        await updateFlight(updated as any);
+      } else {
+        await updateVoyage(updated as any);
+      }
+      toast.success(`Status updated to ${statusId}`);
       onVoyageUpdated?.();
     } catch (error) {
       console.error("Failed to update status:", error);
@@ -135,12 +148,19 @@ export function VesselTrack({
 
     setIsLoading(true);
     try {
-      await deleteVoyage(activeVoyageForStatus.voyageId);
-      toast.success("Voyage deleted successfully");
+      const vid =
+        (activeVoyageForStatus as any).voyageId ||
+        (activeVoyageForStatus as any).flightId;
+      if (isAviation) {
+        await deleteFlight(vid);
+      } else {
+        await deleteVoyage(vid);
+      }
+      toast.success("Deleted successfully");
       onVoyageUpdated?.();
     } catch (error) {
-      console.error("Failed to delete voyage:", error);
-      toast.error("Failed to delete voyage");
+      console.error("Failed to delete:", error);
+      toast.error("Failed to delete");
     } finally {
       setIsLoading(false);
       handleStatusClose();
@@ -167,7 +187,6 @@ export function VesselTrack({
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      {/* ... previous render code ... */}
       <Box
         sx={{
           fontSize: 11,
@@ -188,10 +207,9 @@ export function VesselTrack({
             py: 0.5,
             borderRadius: "999px",
             border: "1px solid var(--accent)",
-            borderOpacity: 0.2,
           }}
         >
-          <Ship size={14} />
+          {isAviation ? <Plane size={14} /> : <Ship size={14} />}
           <Typography
             component="span"
             sx={{
@@ -201,7 +219,7 @@ export function VesselTrack({
               color: "var(--accent)",
             }}
           >
-            {vessel.vesselName}
+            {vesselName}
           </Typography>
         </Box>
       </Box>
@@ -215,15 +233,19 @@ export function VesselTrack({
           gap: 1,
         }}
       >
-        {vessel.voyages.map((voyage, voyIdx) => {
-          const isSelected = voyage.voyageId === selectedVoyageId;
+        {vessel.voyages.map((v, voyIdx) => {
+          const voyage = v as any;
+          const vid = voyage.voyageId || voyage.flightId;
+          const isSelected = vid === selectedVoyageId;
+          const arrivalTime = voyage.eta || voyage.arrivalDateTime;
+          const weightUtil = voyage.weightUtil ?? voyage.payloadUtil ?? 0;
+          const deckUtil = voyage.deckUtil ?? voyage.cabinUtil ?? 0;
+
           return (
             <Box
-              key={voyage.voyageId || voyIdx}
+              key={vid || voyIdx}
               className="voyage-card-box"
-              onClick={() =>
-                onSelectVoyage(vessel.vesselId || "", voyage.voyageId)
-              }
+              onClick={() => onSelectVoyage(vesselId || "", vid)}
               sx={{
                 cursor: "pointer",
                 transition: "all 0.2s ease",
@@ -242,14 +264,12 @@ export function VesselTrack({
               }}
               onDragOver={(e) => {
                 e.preventDefault();
-                // Check if voyage is cancelled or completed
                 if (
                   voyage.statusId === "cancelled" ||
                   voyage.statusName === "cancelled" ||
                   voyage.statusId === "completed" ||
                   voyage.statusName === "completed"
                 ) {
-                  // Must allow drop for onDrop to fire and show toast
                   e.dataTransfer.dropEffect = "move";
                   (e.currentTarget as HTMLElement).style.backgroundColor =
                     "rgba(var(--danger-rgb), 0.1)";
@@ -272,28 +292,19 @@ export function VesselTrack({
                 (e.currentTarget as HTMLElement).style.backgroundColor = "";
                 (e.currentTarget as HTMLElement).style.borderColor = "";
 
-                // Prevent drop if voyage is cancelled or completed
                 if (
                   voyage.statusId === "cancelled" ||
                   voyage.statusName === "cancelled" ||
                   voyage.statusId === "completed" ||
                   voyage.statusName === "completed"
                 ) {
-                  const status =
-                    voyage.statusName || voyage.statusId || "completed";
-                  toast.error(
-                    `Cannot add requests to a ${status.toLowerCase()} voyage`,
-                  );
+                  toast.error(`Cannot add requests to a finished entry`);
                   return;
                 }
 
                 const requestId = e.dataTransfer.getData("requestId");
                 if (requestId && onDropRequest) {
-                  onDropRequest(
-                    requestId,
-                    voyage.voyageId,
-                    vessel.vesselId || "",
-                  );
+                  onDropRequest(requestId, vid, vesselId || "");
                 }
               }}
             >
@@ -305,13 +316,10 @@ export function VesselTrack({
                 }}
               >
                 <span style={{ fontWeight: 500 }}>
-                  {voyage.originName ||
-                    voyage.originId ||
-                    (voyage as any).origin}{" "}
-                  →{" "}
+                  {voyage.originName || voyage.originId || voyage.origin} →{" "}
                   {voyage.destinationName ||
                     voyage.destinationId ||
-                    (voyage as any).destination}
+                    voyage.destination}
                 </span>
                 <Box
                   sx={{
@@ -326,7 +334,7 @@ export function VesselTrack({
                     Dep {dayjs(voyage.departureDateTime).format("DD MMM HH:mm")}
                   </span>
                   <span>|</span>
-                  <span>ETA {dayjs(voyage.eta).format("DD MMM HH:mm")}</span>
+                  <span>Arr {dayjs(arrivalTime).format("DD MMM HH:mm")}</span>
                 </Box>
               </Box>
               <Box
@@ -337,9 +345,8 @@ export function VesselTrack({
                   color: "var(--muted)",
                 }}
               >
-                <span>Weight {formatNumber(voyage.weightUtil, 1)}%</span>
-                <span>Deck {formatNumber(voyage.deckUtil, 1)}%</span>
-                <span>Cabin {formatNumber(voyage.cabinUtil, 1)}%</span>
+                <span>Weight {formatNumber(weightUtil, 1)}%</span>
+                <span>Space {formatNumber(deckUtil, 1)}%</span>
               </Box>
               <Box
                 sx={{
@@ -350,16 +357,16 @@ export function VesselTrack({
                   alignItems: "center",
                 }}
               >
-                <span>Deck</span>
+                <span>Util</span>
                 <Box className="voyage-util-bar-box">
                   <Box
                     className="voyage-util-fill-box"
-                    sx={{ width: `${voyage.deckUtil}%` }}
+                    sx={{ width: `${deckUtil}%` }}
                   ></Box>
                 </Box>
               </Box>
               <Box sx={{ display: "flex", gap: 0.35, mt: 0.5 }}>
-                {voyage.cargoDistribution.map((cargo, cIdx) => (
+                {voyage.cargoDistribution?.map((cargo: any, cIdx: number) => (
                   <Box
                     key={cIdx}
                     className="cargo-block-unit"
@@ -391,12 +398,11 @@ export function VesselTrack({
                       success: "var(--success)",
                       error: "var(--danger)",
                       warning: "var(--warning)",
-                      info: "var(--success)", // Use success for En Route
+                      info: "var(--success)",
                       default: "var(--muted)",
                     };
                     const vColor =
-                      colorMap[style.color as keyof typeof colorMap] ||
-                      "var(--muted)";
+                      (colorMap as any)[style.color] || "var(--muted)";
 
                     return (
                       <span
@@ -419,7 +425,7 @@ export function VesselTrack({
                       </span>
                     );
                   })()}
-                  {voyage.tags?.map((tag, tIdx) => (
+                  {voyage.tags?.map((tag: any, tIdx: number) => (
                     <span
                       key={tIdx}
                       className="queue-tag"
@@ -428,31 +434,6 @@ export function VesselTrack({
                       {tag}
                     </span>
                   ))}
-                  {voyage.stops && voyage.stops.length > 0 && (
-                    <Tooltip
-                      title={`${voyage.stops.length} Stop${voyage.stops.length > 1 ? "s" : ""}: ${voyage.stops.map((s) => s.locationId).join(", ")}`}
-                      arrow
-                    >
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 0.5,
-                          bgcolor: "rgba(255,255,255,0.05)",
-                          px: 0.5,
-                          py: 0,
-                          borderRadius: 0.5,
-                          border: "1px solid var(--border)",
-                          color: "var(--accent)",
-                        }}
-                      >
-                        <MapPin size={10} />
-                        <span style={{ fontSize: 9 }}>
-                          {voyage.stops.length}
-                        </span>
-                      </Box>
-                    </Tooltip>
-                  )}
                 </Box>
                 <Box sx={{ display: "flex", gap: 0.5, flexShrink: 0 }}>
                   <Tooltip title="View Manifest" arrow>
@@ -472,7 +453,7 @@ export function VesselTrack({
                     </IconButton>
                   </Tooltip>
                   {onEditVoyage && (
-                    <Tooltip title="Edit Voyage" arrow>
+                    <Tooltip title="Edit" arrow>
                       <IconButton
                         size="small"
                         onClick={(e) => {
@@ -506,9 +487,7 @@ export function VesselTrack({
             bgcolor: "var(--panel)",
             border: "1px solid var(--border)",
             minWidth: 120,
-            "& .MuiList-root": {
-              p: 0.5,
-            },
+            "& .MuiList-root": { p: 0.5 },
           },
         }}
       >
@@ -528,8 +507,8 @@ export function VesselTrack({
             }}
           >
             <ListItemIcon sx={{ minWidth: 16 }}>
-              {activeVoyageForStatus?.statusName === status.id ||
-              activeVoyageForStatus?.statusId === status.id ? (
+              {(activeVoyageForStatus as any)?.statusName === status.id ||
+              (activeVoyageForStatus as any)?.statusId === status.id ? (
                 <CheckCircle2
                   size={10}
                   color={status.color.replace("var(--error)", "var(--danger)")}
@@ -565,12 +544,11 @@ export function VesselTrack({
             <Trash2 size={10} />
           </ListItemIcon>
           <ListItemText primaryTypographyProps={{ style: { fontSize: 10 } }}>
-            Delete Voyage
+            Delete {isAviation ? "Flight" : "Voyage"}
           </ListItemText>
         </MenuItem>
       </Menu>
 
-      {/* Confirmation Dialog */}
       <Dialog
         open={confirmDialogOpen}
         onClose={() => !isLoading && setConfirmDialogOpen(false)}
@@ -583,17 +561,18 @@ export function VesselTrack({
           },
         }}
       >
-        <DialogTitle sx={{ bgcolor: "var(--panel)", color: "var(--text)" }}>
-          {confirmAction === "delete" ? "Delete Voyage" : "Cancel Voyage"}
+        <DialogTitle sx={{ color: "var(--text)" }}>
+          {confirmAction === "delete" ? "Delete " : "Cancel "}
+          {isAviation ? "Flight" : "Voyage"}
         </DialogTitle>
-        <DialogContent sx={{ bgcolor: "var(--panel)", color: "var(--muted)" }}>
+        <DialogContent sx={{ color: "var(--muted)" }}>
           <Typography variant="body2">
             {confirmAction === "delete"
-              ? "Are you sure you want to delete this voyage? This action will remove the voyage and unassign all items. This cannot be undone."
-              : "Are you sure you want to cancel this voyage? All assigned items will be unassigned and returned to the queue."}
+              ? `Are you sure you want to delete this ${isAviation ? "flight" : "voyage"}? This action will remove it and unassign all items.`
+              : `Are you sure you want to cancel? All assigned items will be unassigned.`}
           </Typography>
         </DialogContent>
-        <DialogActions sx={{ bgcolor: "var(--panel)", p: 2 }}>
+        <DialogActions sx={{ p: 2 }}>
           <Button
             onClick={() => setConfirmDialogOpen(false)}
             disabled={isLoading}
@@ -605,7 +584,7 @@ export function VesselTrack({
             onClick={handleConfirmAction}
             disabled={isLoading}
             variant="contained"
-            color="error" // Use error color for both
+            color="error"
             startIcon={
               isLoading ? <CircularProgress size={16} color="inherit" /> : null
             }
@@ -614,7 +593,7 @@ export function VesselTrack({
               ? "Processing..."
               : confirmAction === "delete"
                 ? "Delete"
-                : "Cancel Voyage"}
+                : "Confirm"}
           </Button>
         </DialogActions>
       </Dialog>

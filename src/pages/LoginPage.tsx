@@ -21,20 +21,26 @@ export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loginMode, setLoginMode] = useState<"sso" | "manual">("sso");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
   const handleLogin = async () => {
     setLoading(true);
     try {
-      const response = await login();
+      const response = await login(
+        loginMode === "manual" ? email : undefined,
+        loginMode === "manual" ? password : undefined,
+      );
       if (response.status === 200 && response.data) {
         navigate("/marine-request");
       } else {
         toast.error("Login failed: Invalid response from server");
       }
     } catch (error: any) {
+      console.error("Login error", error);
       toast.error(
         "Login failed: " +
-          (error.response?.data?.message || error.message || error),
+          (error.response?.data?.message || error.message || "Unauthorized"),
       );
     } finally {
       setLoading(false);
@@ -216,6 +222,8 @@ export function LoginPage() {
               label="Email Address"
               placeholder="name@company.com"
               autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -234,6 +242,8 @@ export function LoginPage() {
               fullWidth
               label="Password"
               type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -293,7 +303,7 @@ export function LoginPage() {
 
         <Box sx={{ textAlign: "center" }}>
           <Typography variant="caption" sx={{ color: "#94a3b8" }}>
-            © 2026 Clarity Solutions. All rights reserved.
+            © 2026 Klarity Solutions. All rights reserved.
           </Typography>
         </Box>
       </Paper>

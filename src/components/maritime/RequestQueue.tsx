@@ -32,6 +32,7 @@ import {
   Weight,
   Info,
   MapPin,
+  Search,
 } from "lucide-react";
 import dayjs from "dayjs";
 import { useState, useEffect } from "react";
@@ -43,6 +44,7 @@ interface RequestQueueProps {
 export function RequestQueue({ requests }: RequestQueueProps) {
   const [selectedRequest, setSelectedRequest] =
     useState<MovementRequest | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [requestTypes, setRequestTypes] = useState<RequestTypeOption[]>([]);
   const [businessUnits, setBusinessUnits] = useState<BusinessUnitOption[]>([]);
@@ -158,7 +160,71 @@ export function RequestQueue({ requests }: RequestQueueProps) {
             </span>
           </Box>
 
-          {requests.length === 0 ? (
+          <Box
+            sx={{
+              px: 2,
+              mb: 1.5,
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+            }}
+          >
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                bgcolor: "var(--panel)",
+                border: "1px solid var(--border)",
+                borderRadius: "6px",
+                px: 1,
+                py: 0.5,
+                flex: 1,
+                transition: "all 0.2s",
+                "&:focus-within": {
+                  borderColor: "var(--accent)",
+                  boxShadow: "0 0 0 2px rgba(59, 130, 246, 0.1)",
+                },
+              }}
+            >
+              <Search size={14} color="var(--muted)" />
+              <input
+                type="text"
+                placeholder="Search requests or items..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  border: "none",
+                  background: "transparent",
+                  outline: "none",
+                  fontSize: "11px",
+                  color: "var(--text)",
+                  width: "100%",
+                  marginLeft: "8px",
+                  fontFamily: "inherit",
+                }}
+              />
+              {searchQuery && (
+                <X
+                  size={12}
+                  color="var(--muted)"
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setSearchQuery("")}
+                />
+              )}
+            </Box>
+          </Box>
+
+          {requests.filter((req) => {
+            if (!searchQuery) return true;
+            const query = searchQuery.toLowerCase();
+            const matchesId = req.requestId.toLowerCase().includes(query);
+            const matchesItems = req.items.some(
+              (item) =>
+                (item.itemTypeName?.toLowerCase() || "").includes(query) ||
+                (item.description?.toLowerCase() || "").includes(query),
+            );
+            return matchesId || matchesItems;
+          }).length === 0 ? (
             <Typography
               variant="caption"
               sx={{
@@ -168,179 +234,205 @@ export function RequestQueue({ requests }: RequestQueueProps) {
                 my: 2,
               }}
             >
-              No unscheduled requests
+              {requests.length === 0
+                ? "No unscheduled requests"
+                : "No matching requests"}
             </Typography>
           ) : (
-            requests.map((req) => {
-              const style = getUrgencyStyle(req.urgency || "Routine");
-              return (
-                <Box
-                  key={req.requestId}
-                  className="queue-item-card"
-                  onClick={() => handleCardClick(req)}
-                  draggable
-                  onDragStart={(e) => {
-                    e.dataTransfer.setData("requestId", req.requestId);
-                    e.dataTransfer.effectAllowed = "move";
-                  }}
-                  sx={{ cursor: "grab", "&:active": { cursor: "grabbing" } }}
-                >
+            requests
+              .filter((req) => {
+                if (!searchQuery) return true;
+                const query = searchQuery.toLowerCase();
+                const matchesId = req.requestId.toLowerCase().includes(query);
+                const matchesItems = req.items.some(
+                  (item) =>
+                    (item.itemTypeName?.toLowerCase() || "").includes(query) ||
+                    (item.description?.toLowerCase() || "").includes(query),
+                );
+                return matchesId || matchesItems;
+              })
+              .map((req) => {
+                const style = getUrgencyStyle(req.urgency || "Routine");
+                return (
                   <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      mb: 0.5,
+                    key={req.requestId}
+                    className="queue-item-card"
+                    onClick={() => handleCardClick(req)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData("requestId", req.requestId);
+                      e.dataTransfer.effectAllowed = "move";
                     }}
+                    sx={{ cursor: "grab", "&:active": { cursor: "grabbing" } }}
                   >
-                    <span
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: "var(--text)",
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        mb: 0.5,
                       }}
                     >
-                      {req.requestId}
-                    </span>
-                    <Box
-                      sx={{ display: "flex", gap: 0.5, alignItems: "center" }}
-                    >
                       <span
                         style={{
-                          width: 5,
-                          height: 5,
-                          borderRadius: "50%",
-                          backgroundColor: "var(--success)",
-                        }}
-                      ></span>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          color: "var(--muted)",
+                          fontSize: 10,
+                          fontWeight: 600,
+                          color: "var(--text)",
                         }}
                       >
-                        {req.originName || req.originId} →{" "}
-                        {req.destinationName || req.destinationId}
+                        {req.requestId}
                       </span>
+                      <Box
+                        sx={{ display: "flex", gap: 0.5, alignItems: "center" }}
+                      >
+                        <span
+                          style={{
+                            width: 5,
+                            height: 5,
+                            borderRadius: "50%",
+                            backgroundColor: "var(--success)",
+                          }}
+                        ></span>
+                        <span
+                          style={{
+                            fontSize: 9,
+                            color: "var(--muted)",
+                          }}
+                        >
+                          {req.originName || req.originId} →{" "}
+                          {req.destinationName || req.destinationId}
+                        </span>
+                      </Box>
                     </Box>
-                  </Box>
 
-                  <Box
-                    sx={{
-                      fontSize: 9,
-                      color: "var(--muted)",
-                      mb: 0.5,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 1,
-                    }}
-                  >
                     <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-                    >
-                      <Clock size={9} />
-                      <span style={{ fontWeight: 500 }}>ED:</span>
-                      <span>
-                        {dayjs(req.earliestDeparture).format("DD MMM HH:mm")}
-                      </span>
-                    </Box>
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-                    >
-                      <span style={{ fontWeight: 500 }}>LA:</span>
-                      <span>
-                        {dayjs(req.latestArrival).format("DD MMM HH:mm")}
-                      </span>
-                    </Box>
-                  </Box>
-
-                  <Box
-                    sx={{
-                      fontSize: 9,
-                      color: "var(--muted)",
-                      mb: 0.75,
-                      fontWeight: 500,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 0.5,
-                    }}
-                  >
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.25 }}
-                    >
-                      <Package size={9} />
-                      <span>
-                        {req.items?.length || 0}{" "}
-                        {req.items?.length === 1 ? "item" : "items"}
-                      </span>
-                    </Box>
-                    <span>·</span>
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.25 }}
-                    >
-                      <Weight size={9} />
-                      <span>{req.totalWeight?.toFixed(1)}t</span>
-                    </Box>
-                    <span>·</span>
-                    <Box
-                      sx={{ display: "flex", alignItems: "center", gap: 0.25 }}
-                    >
-                      <Ruler size={9} />
-                      <span>{req.totalDeckArea?.toFixed(1)}m²</span>
-                    </Box>
-                  </Box>
-
-                  <Box
-                    sx={{
-                      display: "flex",
-                      gap: 0.5,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <Chip
-                      label={req.urgency}
-                      size="small"
-                      icon={style.icon || undefined}
                       sx={{
-                        height: 16,
-                        fontSize: "8px",
-                        fontWeight: 600,
-                        color: style.color,
-                        bgcolor: style.bg,
-                        border: `1px solid ${style.color}40`,
-                        "& .MuiChip-icon": {
-                          color: "inherit",
-                          ml: "3px",
-                          mr: "-3px",
-                          width: 8,
-                          height: 8,
-                        },
+                        fontSize: 9,
+                        color: "var(--muted)",
+                        mb: 0.5,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1,
                       }}
-                    />
-                    {req.isHazardous && (
+                    >
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                      >
+                        <Clock size={9} />
+                        <span style={{ fontWeight: 500 }}>ED:</span>
+                        <span>
+                          {dayjs(req.earliestDeparture).format("DD MMM HH:mm")}
+                        </span>
+                      </Box>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
+                      >
+                        <span style={{ fontWeight: 500 }}>LA:</span>
+                        <span>
+                          {dayjs(req.latestArrival).format("DD MMM HH:mm")}
+                        </span>
+                      </Box>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        fontSize: 9,
+                        color: "var(--muted)",
+                        mb: 0.75,
+                        fontWeight: 500,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 0.5,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.25,
+                        }}
+                      >
+                        <Package size={9} />
+                        <span>
+                          {req.items?.length || 0}{" "}
+                          {req.items?.length === 1 ? "item" : "items"}
+                        </span>
+                      </Box>
+                      <span>·</span>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.25,
+                        }}
+                      >
+                        <Weight size={9} />
+                        <span>{req.totalWeight?.toFixed(1)}t</span>
+                      </Box>
+                      <span>·</span>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.25,
+                        }}
+                      >
+                        <Ruler size={9} />
+                        <span>{req.totalDeckArea?.toFixed(1)}m²</span>
+                      </Box>
+                    </Box>
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        gap: 0.5,
+                        flexWrap: "wrap",
+                      }}
+                    >
                       <Chip
-                        label="Hazardous"
+                        label={req.urgency}
                         size="small"
-                        icon={<ShieldAlert size={8} />}
+                        icon={style.icon || undefined}
                         sx={{
                           height: 16,
                           fontSize: "8px",
                           fontWeight: 600,
-                          color: "#f43f5e",
-                          bgcolor: "rgba(244, 63, 94, 0.1)",
-                          border: "1px solid rgba(244, 63, 94, 0.4)",
+                          color: style.color,
+                          bgcolor: style.bg,
+                          border: `1px solid ${style.color}40`,
                           "& .MuiChip-icon": {
                             color: "inherit",
                             ml: "3px",
                             mr: "-3px",
+                            width: 8,
+                            height: 8,
                           },
                         }}
                       />
-                    )}
+                      {req.isHazardous && (
+                        <Chip
+                          label="Hazardous"
+                          size="small"
+                          icon={<ShieldAlert size={8} />}
+                          sx={{
+                            height: 16,
+                            fontSize: "8px",
+                            fontWeight: 600,
+                            color: "#f43f5e",
+                            bgcolor: "rgba(244, 63, 94, 0.1)",
+                            border: "1px solid rgba(244, 63, 94, 0.4)",
+                            "& .MuiChip-icon": {
+                              color: "inherit",
+                              ml: "3px",
+                              mr: "-3px",
+                            },
+                          }}
+                        />
+                      )}
+                    </Box>
                   </Box>
-                </Box>
-              );
-            })
+                );
+              })
           )}
         </Box>
 

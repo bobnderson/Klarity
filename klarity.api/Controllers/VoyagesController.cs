@@ -138,7 +138,7 @@ public class VoyagesController : ControllerBase
     }
 
     [HttpPost("{id}/assign-items")]
-    public async Task<IActionResult> AssignItems(string id, [FromBody] AssignmentRequest request)
+    public async Task<IActionResult> AssignItems(string id, [FromBody] VoyageAssignmentRequest request)
     {
         await _repository.AssignItemsToVoyageAsync(id, request.ItemIds);
         
@@ -154,7 +154,7 @@ public class VoyagesController : ControllerBase
     }
 
     [HttpPost("{id}/unassign-items")]
-    public async Task<IActionResult> UnassignItems(string id, [FromBody] AssignmentRequest request)
+    public async Task<IActionResult> UnassignItems(string id, [FromBody] VoyageAssignmentRequest request)
     {
         await _repository.UnassignItemsFromVoyageAsync(id, request.ItemIds);
         
@@ -195,7 +195,7 @@ public class VoyagesController : ControllerBase
         return Ok(recommendations);
     }
 
-    public class AssignmentRequest
+    public class VoyageAssignmentRequest
     {
         public List<string> ItemIds { get; set; } = new();
     }

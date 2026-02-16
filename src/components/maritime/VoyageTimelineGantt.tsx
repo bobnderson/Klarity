@@ -1,12 +1,12 @@
 import React, { useRef } from "react";
 import dayjs, { Dayjs } from "dayjs";
 import { Box, Typography, Tooltip } from "@mui/material";
-import { Ship } from "lucide-react";
-import type { Vessel } from "../../types/maritime/marine";
+import { Ship, Plane } from "lucide-react";
+import type { UnifiedVessel, UnifiedVoyage } from "../../types/maritime/marine";
 import { CARGO_TYPE_CONFIG } from "../../types/maritime/marine";
 
 interface VoyageTimelineGanttProps {
-  vessels: Vessel[];
+  vessels: UnifiedVessel[];
   startDate: Dayjs | null;
   endDate: Dayjs | null;
   onSelectVoyage: (vesselId: string, voyageId: string) => void;
@@ -85,7 +85,7 @@ export function VoyageTimelineGantt({
         minWidth: 0,
       }}
     >
-      {/* 1. LAYERED HEADER (Non-scrollable Vessel info + Scrollable Dates) */}
+      {/* 1. LAYERED HEADER */}
       <Box
         sx={{
           display: "flex",
@@ -114,7 +114,7 @@ export function VoyageTimelineGantt({
                 textTransform: "uppercase",
               }}
             >
-              Vessel
+              Vessel / Aircraft
             </Typography>
           </Box>
           <Box sx={{ width: 120, px: 1 }}>
@@ -177,9 +177,9 @@ export function VoyageTimelineGantt({
         </Box>
       </Box>
 
-      {/* 2. LAYERED BODY (Split into two vertical scroll-synced columns) */}
+      {/* 2. LAYERED BODY */}
       <Box sx={{ display: "flex", flex: 1, overflow: "hidden", minWidth: 0 }}>
-        {/* Left Side: Metadata Body (Vertical scroll ONLY, usually hidden scrollbar) */}
+        {/* Left Side: Metadata Body */}
         <Box
           ref={metadataBodyRef}
           onScroll={handleVerticalScroll}
@@ -189,17 +189,22 @@ export function VoyageTimelineGantt({
             overflowY: "auto",
             overflowX: "hidden",
             borderRight: "2px solid var(--border)",
-            "&::-webkit-scrollbar": { display: "none" }, // Hide scrollbar to keep it clean
+            "&::-webkit-scrollbar": { display: "none" },
             msOverflowStyle: "none",
             scrollbarWidth: "none",
           }}
         >
-          {vessels.map((vessel) => {
+          {vessels.map((v, vIdx) => {
+            const vessel = v as any;
+            const isAviation = vessel.helicopterId !== undefined;
+            const vesselId = vessel.vesselId || vessel.helicopterId;
+            const vesselName = vessel.vesselName || vessel.helicopterName;
             const rowHeight =
               Math.max(vessel.voyages.length, 1) * voyageRowHeight;
+
             return (
               <Box
-                key={vessel.vesselId}
+                key={vesselId || vIdx}
                 sx={{
                   display: "flex",
                   borderBottom: "1px solid var(--border)",
@@ -228,80 +233,86 @@ export function VoyageTimelineGantt({
                       display: "flex",
                     }}
                   >
-                    <Ship size={14} />
+                    {isAviation ? <Plane size={14} /> : <Ship size={14} />}
                   </Box>
                   <Typography
                     noWrap
                     sx={{ fontSize: 11, fontWeight: 700, color: "var(--text)" }}
                   >
-                    {vessel.vesselName}
+                    {vesselName}
                   </Typography>
                 </Box>
                 <Box sx={{ display: "flex", flexDirection: "column", flex: 1 }}>
                   {vessel.voyages.length > 0 ? (
-                    vessel.voyages.map((voyage) => (
-                      <Box
-                        key={voyage.voyageId}
-                        sx={{
-                          display: "flex",
-                          height: voyageRowHeight,
-                          alignItems: "center",
-                          "&:not(:last-child)": {
-                            borderBottom:
-                              "1px solid var(--border-subtle, rgba(255,255,255,0.03))",
-                          },
-                        }}
-                      >
-                        <Box sx={{ width: 120, px: 1 }}>
-                          <Typography
-                            noWrap
-                            sx={{
-                              fontSize: 10,
-                              color: "var(--text)",
-                              fontWeight: 500,
-                            }}
-                          >
-                            {voyage.originName ||
-                              voyage.originId ||
-                              (voyage as any).origin}{" "}
-                            →{" "}
-                            {voyage.destinationName ||
-                              voyage.destinationId ||
-                              (voyage as any).destination}
-                          </Typography>
-                        </Box>
+                    vessel.voyages.map((voy: any, voyIdx: number) => {
+                      const voyage = voy as any;
+                      const vid = voyage.voyageId || voyage.flightId;
+                      const arrTime = voyage.eta || voyage.arrivalDateTime;
+
+                      return (
                         <Box
+                          key={vid || voyIdx}
                           sx={{
-                            width: 120,
-                            px: 1,
                             display: "flex",
-                            flexDirection: "column",
+                            height: voyageRowHeight,
+                            alignItems: "center",
+                            "&:not(:last-child)": {
+                              borderBottom:
+                                "1px solid var(--border-subtle, rgba(255,255,255,0.03))",
+                            },
                           }}
                         >
-                          <Typography
+                          <Box sx={{ width: 120, px: 1 }}>
+                            <Typography
+                              noWrap
+                              sx={{
+                                fontSize: 10,
+                                color: "var(--text)",
+                                fontWeight: 500,
+                              }}
+                            >
+                              {voyage.originName ||
+                                voyage.originId ||
+                                voyage.origin}{" "}
+                              →{" "}
+                              {voyage.destinationName ||
+                                voyage.destinationId ||
+                                voyage.destination}
+                            </Typography>
+                          </Box>
+                          <Box
                             sx={{
-                              fontSize: 8.5,
-                              color: "var(--muted)",
-                              lineHeight: 1.2,
+                              width: 120,
+                              px: 1,
+                              display: "flex",
+                              flexDirection: "column",
                             }}
                           >
-                            Dep:{" "}
-                            {dayjs(voyage.departureDateTime).format(
-                              "DD/MM HH:mm",
-                            )}
-                          </Typography>
-                          <Typography
-                            sx={{
-                              fontSize: 8.5,
-                              color: "var(--muted)",
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            ETA: {dayjs(voyage.eta).format("DD/MM HH:mm")}
-                          </Typography>
+                            <Typography
+                              sx={{
+                                fontSize: 8.5,
+                                color: "var(--muted)",
+                                lineHeight: 1.2,
+                              }}
+                            >
+                              Dep:{" "}
+                              {dayjs(voyage.departureDateTime).format(
+                                "DD/MM HH:mm",
+                              )}
+                            </Typography>
+                            <Typography
+                              sx={{
+                                fontSize: 8.5,
+                                color: "var(--muted)",
+                                lineHeight: 1.2,
+                              }}
+                            >
+                              Arr: {dayjs(arrTime).format("DD/MM HH:mm")}
+                            </Typography>
+                          </Box>
                         </Box>
-                      </Box>
-                    ))
+                      );
+                    })
                   ) : (
                     <Box
                       sx={{
@@ -318,7 +329,7 @@ export function VoyageTimelineGantt({
                           fontStyle: "italic",
                         }}
                       >
-                        No Voyages
+                        No Entries
                       </Typography>
                     </Box>
                   )}
@@ -328,7 +339,7 @@ export function VoyageTimelineGantt({
           })}
         </Box>
 
-        {/* Right Side: Timeline Body (Both Horizontal and Vertical scroll) */}
+        {/* Right Side: Timeline Body */}
         <Box
           ref={timelineBodyRef}
           onScroll={(e) => {
@@ -338,161 +349,168 @@ export function VoyageTimelineGantt({
           sx={{ flex: 1, overflow: "auto", minWidth: 0 }}
         >
           <Box sx={{ width: timelineWidth, position: "relative" }}>
-            {vessels.map((vessel) => (
-              <Box
-                key={vessel.vesselId}
-                sx={{
-                  position: "relative",
-                  borderBottom: "1px solid var(--border)",
-                }}
-              >
-                {/* Background Grid Lines Vertical */}
+            {vessels.map((v, vIdx) => {
+              const vessel = v as any;
+              const vesselId = vessel.vesselId || vessel.helicopterId;
+
+              return (
                 <Box
+                  key={vesselId || vIdx}
                   sx={{
-                    position: "absolute",
-                    top: 0,
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    display: "flex",
-                    pointerEvents: "none",
+                    position: "relative",
+                    borderBottom: "1px solid var(--border)",
                   }}
                 >
-                  {dateHeaders.map((date, idx) => (
-                    <Box
-                      key={idx}
-                      sx={{
-                        width: dayWidth,
-                        height: "100%",
-                        borderRight: "1px solid var(--border)",
-                        bgcolor: date.isSame(dayjs(), "day")
-                          ? "var(--accent-soft)"
-                          : idx % 2 === 0
-                            ? "rgba(0,0,0,0.005)"
-                            : "transparent",
-                        opacity: 0.5,
-                      }}
-                    />
-                  ))}
-                </Box>
-
-                {/* Voyage Lanes */}
-                {vessel.voyages.length > 0 ? (
-                  vessel.voyages.map((voyage) => {
-                    const left = calculatePosition(voyage.departureDateTime);
-                    const width = calculateWidth(
-                      voyage.departureDateTime,
-                      voyage.eta,
-                    );
-                    const isSelected = voyage.voyageId === selectedVoyageId;
-
-                    return (
-                      <Box
-                        key={voyage.voyageId}
-                        sx={{
-                          height: voyageRowHeight,
-                          position: "relative",
-                          "&:not(:last-child)": {
-                            borderBottom:
-                              "1px solid var(--border-subtle, rgba(255,255,255,0.03))",
-                          },
-                        }}
-                      >
-                        <Tooltip
-                          title={`${voyage.originName || voyage.originId || (voyage as any).origin} → ${voyage.destinationName || voyage.destinationId || (voyage as any).destination}\nDep: ${dayjs(voyage.departureDateTime).format("DD MMM HH:mm")}\nETA: ${dayjs(voyage.eta).format("DD MMM HH:mm")}`}
-                          arrow
-                        >
-                          <Box
-                            onClick={() =>
-                              onSelectVoyage(
-                                vessel.vesselId || "",
-                                voyage.voyageId,
-                              )
-                            }
-                            sx={{
-                              position: "absolute",
-                              left,
-                              top: "50%",
-                              transform: "translateY(-50%)",
-                              width: Math.max(width, 4),
-                              height: 28,
-                              bgcolor: isSelected
-                                ? "var(--accent)"
-                                : "rgba(2, 132, 199, 0.15)",
-                              border: `1px solid var(--accent)`,
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              transition: "all 0.1s",
-                              zIndex: isSelected ? 2 : 1,
-                              "&:hover": {
-                                bgcolor: isSelected
-                                  ? "var(--accent)"
-                                  : "rgba(2, 132, 199, 0.25)",
-                                transform: "translateY(-50%) scale(1.01)",
-                                boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                              },
-                            }}
-                          >
-                            <Box sx={{ display: "flex", gap: 0.25, ml: 0.5 }}>
-                              {voyage.cargoDistribution
-                                .slice(0, 5)
-                                .map((cargo, cIdx) => (
-                                  <Box
-                                    key={cIdx}
-                                    sx={{
-                                      width: 3,
-                                      height: 12,
-                                      borderRadius: "1px",
-                                      bgcolor:
-                                        CARGO_TYPE_CONFIG[cargo.type]?.color ||
-                                        "var(--muted)",
-                                    }}
-                                  />
-                                ))}
-                            </Box>
-                            {width > 60 && (
-                              <Typography
-                                noWrap
-                                sx={{
-                                  fontSize: 9,
-                                  ml: 1,
-                                  fontWeight: 700,
-                                  color: isSelected ? "white" : "var(--accent)",
-                                }}
-                              >
-                                {voyage.originName ||
-                                  voyage.originId ||
-                                  (voyage as any).origin}
-                              </Typography>
-                            )}
-                          </Box>
-                        </Tooltip>
-                      </Box>
-                    );
-                  })
-                ) : (
-                  <Box sx={{ height: voyageRowHeight }} />
-                )}
-
-                {/* Current Time Marker */}
-                {dayjs().isAfter(startDate) && dayjs().isBefore(endDate) && (
+                  {/* Background Grid Lines Vertical */}
                   <Box
                     sx={{
                       position: "absolute",
-                      left: calculatePosition(dayjs().toISOString()),
                       top: 0,
                       bottom: 0,
-                      width: 1.5,
-                      bgcolor: "var(--danger)",
-                      zIndex: 3,
+                      left: 0,
+                      right: 0,
+                      display: "flex",
                       pointerEvents: "none",
                     }}
-                  />
-                )}
-              </Box>
-            ))}
+                  >
+                    {dateHeaders.map((date, idx) => (
+                      <Box
+                        key={idx}
+                        sx={{
+                          width: dayWidth,
+                          height: "100%",
+                          borderRight: "1px solid var(--border)",
+                          bgcolor: date.isSame(dayjs(), "day")
+                            ? "var(--accent-soft)"
+                            : idx % 2 === 0
+                              ? "rgba(0,0,0,0.005)"
+                              : "transparent",
+                          opacity: 0.5,
+                        }}
+                      />
+                    ))}
+                  </Box>
+
+                  {/* Lanes */}
+                  {vessel.voyages.length > 0 ? (
+                    vessel.voyages.map((voy: any, voyIdx: number) => {
+                      const voyage = voy as any;
+                      const vid = voyage.voyageId || voyage.flightId;
+                      const arrTime = voyage.eta || voyage.arrivalDateTime;
+                      const left = calculatePosition(voyage.departureDateTime);
+                      const width = calculateWidth(
+                        voyage.departureDateTime,
+                        arrTime,
+                      );
+                      const isSelected = vid === selectedVoyageId;
+
+                      return (
+                        <Box
+                          key={vid || voyIdx}
+                          sx={{
+                            height: voyageRowHeight,
+                            position: "relative",
+                            "&:not(:last-child)": {
+                              borderBottom:
+                                "1px solid var(--border-subtle, rgba(255,255,255,0.03))",
+                            },
+                          }}
+                        >
+                          <Tooltip
+                            title={`${voyage.originName || voyage.originId || voyage.origin} → ${voyage.destinationName || voyage.destinationId || voyage.destination}\nDep: ${dayjs(voyage.departureDateTime).format("DD MMM HH:mm")}\nArr: ${dayjs(arrTime).format("DD MMM HH:mm")}`}
+                            arrow
+                          >
+                            <Box
+                              onClick={() =>
+                                onSelectVoyage(vesselId || "", vid)
+                              }
+                              sx={{
+                                position: "absolute",
+                                left,
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                width: Math.max(width, 4),
+                                height: 28,
+                                bgcolor: isSelected
+                                  ? "var(--accent)"
+                                  : "rgba(2, 132, 199, 0.15)",
+                                border: `1px solid var(--accent)`,
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                transition: "all 0.1s",
+                                zIndex: isSelected ? 2 : 1,
+                                "&:hover": {
+                                  bgcolor: isSelected
+                                    ? "var(--accent)"
+                                    : "rgba(2, 132, 199, 0.25)",
+                                  transform: "translateY(-50%) scale(1.01)",
+                                  boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                                },
+                              }}
+                            >
+                              <Box sx={{ display: "flex", gap: 0.25, ml: 0.5 }}>
+                                {voyage.cargoDistribution
+                                  ?.slice(0, 5)
+                                  .map((cargo: any, cIdx: number) => (
+                                    <Box
+                                      key={cIdx}
+                                      sx={{
+                                        width: 3,
+                                        height: 12,
+                                        borderRadius: "1px",
+                                        bgcolor:
+                                          CARGO_TYPE_CONFIG[cargo.type]
+                                            ?.color || "var(--muted)",
+                                      }}
+                                    />
+                                  ))}
+                              </Box>
+                              {width > 60 && (
+                                <Typography
+                                  noWrap
+                                  sx={{
+                                    fontSize: 9,
+                                    ml: 1,
+                                    fontWeight: 700,
+                                    color: isSelected
+                                      ? "white"
+                                      : "var(--accent)",
+                                  }}
+                                >
+                                  {voyage.originName ||
+                                    voyage.originId ||
+                                    voyage.origin}
+                                </Typography>
+                              )}
+                            </Box>
+                          </Tooltip>
+                        </Box>
+                      );
+                    })
+                  ) : (
+                    <Box sx={{ height: voyageRowHeight }} />
+                  )}
+
+                  {/* Current Time Marker */}
+                  {dayjs().isAfter(startDate) && dayjs().isBefore(endDate) && (
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        left: calculatePosition(dayjs().toISOString()),
+                        top: 0,
+                        bottom: 0,
+                        width: 1.5,
+                        bgcolor: "var(--danger)",
+                        zIndex: 3,
+                        pointerEvents: "none",
+                      }}
+                    />
+                  )}
+                </Box>
+              );
+            })}
           </Box>
         </Box>
       </Box>

@@ -1,5 +1,5 @@
 {
-  "name": "clarity-ui",
+  "name": "Klarity-ui",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -14,6 +14,7 @@
     "@emotion/styled": "^11.14.1",
     "@mui/icons-material": "^7.3.7",
     "@mui/material": "^7.3.7",
+    "@mui/x-data-grid": "^8.27.1",
     "@mui/x-date-pickers": "^7.29.4",
     "@tailwindcss/vite": "^4.1.18",
     "axios": "^1.13.4",
@@ -26,7 +27,8 @@
     "react-dom": "^19.2.0",
     "react-leaflet": "^5.0.0",
     "react-router-dom": "^7.13.0",
-    "react-toastify": "^11.0.5"
+    "react-toastify": "^11.0.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

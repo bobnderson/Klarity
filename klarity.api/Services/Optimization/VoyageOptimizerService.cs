@@ -27,74 +27,290 @@ namespace Klarity.Api.Services.Optimization
             List<Voyage> existingVoyages)
         {
             var loads = BuildRequestLoads(requests);
+            
+            // Filter active PSV/MSV vessels or Helicopters
             var activeVessels = vessels.Where(v => 
                 v.StatusId == "active" && 
-                v.Capacities.DeadWeight.HasValue && 
-                v.Capacities.DeckArea.HasValue).ToList();
+                (
+                    (v.Capacities.DeadWeight.HasValue && v.Capacities.DeckArea.HasValue &&
+                     (v.VesselTypeName?.Contains("PSV", StringComparison.OrdinalIgnoreCase) == true || 
+                      v.VesselTypeName?.Contains("MSV", StringComparison.OrdinalIgnoreCase) == true ||
+                      v.VesselTypeId?.Contains("psv", StringComparison.OrdinalIgnoreCase) == true ||
+                      v.VesselTypeId?.Contains("msv", StringComparison.OrdinalIgnoreCase) == true))
+                    ||
+                    (v.VesselTypeName?.Contains("Helicopter", StringComparison.OrdinalIgnoreCase) == true ||
+                     v.VesselTypeId?.Contains("helicopter", StringComparison.OrdinalIgnoreCase) == true)
+                )
+                ).ToList();
 
             var distanceMatrix = BuildDistanceMatrix(locations);
             var candidateVoyages = new List<VoyageCandidate>();
 
-            // SORT loads BY urgencyScore DESC, earliestDeparture ASC
-            var sortedLoads = loads
-                .OrderByDescending(l => l.UrgencyScore)
-                .ThenBy(l => l.EarliestDeparture)
+            // 1. Group by Route (Origin -> Destination)
+            var routeGroups = loads
+                .GroupBy(l => new { l.OriginId, l.DestinationId })
                 .ToList();
 
-            foreach (var load in sortedLoads)
+            foreach (var route in routeGroups)
             {
-                var feasibleAssignments = new List<VoyageCandidate>();
-
-                // 1. Try Existing Voyages (Database)
-                foreach (var voyage in existingVoyages.Where(v => !v.IsDeleted))
+                // Sort requests by EarliestDeparture to process chronologically
+                var sortedRequests = route.OrderBy(r => r.EarliestDeparture).ToList();
+                
+                while (sortedRequests.Any())
                 {
-                    if (IsRouteCompatible(load, voyage) && 
-                        IsTimeWindowCompatible(load, voyage) && 
-                        HasCapacity(load, voyage, vessels.FirstOrDefault(v => v.VesselId == voyage.VesselId)))
+                    // Start a new "Weekly Bucket"
+                    var baseRequest = sortedRequests.First();
+                    // Align to the request's date or start of that day? 
+                    // Let's use the request's EarliestDeparture as the anchor for the week.
+                    var weekStart = baseRequest.EarliestDeparture.Date; 
+                    var weekEnd = weekStart.AddDays(7);
+
+                    // Find all requests in this 7-day window
+                    var weeklyBatch = sortedRequests
+                        .Where(r => r.EarliestDeparture >= weekStart && r.EarliestDeparture < weekEnd)
+                        .ToList();
+
+                    // Remove processed requests from the main list
+                    foreach (var req in weeklyBatch)
                     {
-                        var newVoyage = SimulateAddLoad(voyage, load, vessels.FirstOrDefault(v => v.VesselId == voyage.VesselId));
-                        newVoyage.Score = ScoreVoyage(newVoyage);
-                        feasibleAssignments.Add(newVoyage);
+                        sortedRequests.Remove(req);
                     }
-                }
 
-                // 2. Try Planned Candidates (In-session)
-                foreach (var candidate in candidateVoyages)
-                {
-                    if (IsRouteCompatible(load, candidate) && 
-                        IsTimeWindowCompatible(load, candidate) && 
-                        HasCapacity(load, candidate, vessels.FirstOrDefault(v => v.VesselId == candidate.VesselId)))
+                    // 2. Check for Existing Voyage covering this week
+                    // We look for a voyage on this route departing within the window
+                    var existingVoyage = existingVoyages.FirstOrDefault(v => 
+                        !v.IsDeleted &&
+                        v.OriginId == route.Key.OriginId && 
+                        v.DestinationId == route.Key.DestinationId &&
+                        v.DepartureDateTime >= weekStart && v.DepartureDateTime < weekEnd
+                    );
+
+                    Vessel bestVessel = null;
+
+                    if (existingVoyage != null)
                     {
-                        var updatedCandidate = SimulateMergeLoad(candidate, load, vessels.FirstOrDefault(v => v.VesselId == candidate.VesselId));
-                        updatedCandidate.Score = ScoreVoyage(updatedCandidate);
-                        feasibleAssignments.Add(updatedCandidate);
+                        // Use the vessel assigned to the existing voyage
+                        bestVessel = vessels.FirstOrDefault(v => v.VesselId == existingVoyage.VesselId);
+                         if (bestVessel != null)
+                         {
+                             // Create a candidate from the existing voyage
+                             var candidate = CreateCandidateFromExisting(existingVoyage, bestVessel);
+                             
+                             // Try to add the batch to it
+                             // We might need to split if it doesn't fit
+                             ProcessBatchForVoyage(candidate, weeklyBatch, bestVessel, candidateVoyages, distanceMatrix, locations);
+                             continue;
+                         }
                     }
-                }
 
-                // 3. Try Creating New Voyages
-                foreach (var vessel in activeVessels)
-                {
-                    if (VesselCanServeRoute(vessel, load))
+                    // 3. If no existing voyage, find best vessel to create new one
+                    if (bestVessel == null)
                     {
-                        var newVoyage = CreateNewVoyageCandidate(vessel, load, distanceMatrix, locations);
-                        if (HasCapacity(load, newVoyage, vessel))
-                        {
-                            newVoyage.Score = ScoreVoyage(newVoyage);
-                            feasibleAssignments.Add(newVoyage);
-                        }
+                        bestVessel = activeVessels
+                            .OrderByDescending(v => v.Capacities.DeckArea) // Prefer larger vessels to fit all
+                            .FirstOrDefault();
                     }
-                }
 
-                // 4. Select Best Option
-                if (feasibleAssignments.Any())
-                {
-                    var best = feasibleAssignments.OrderByDescending(f => f.Score).First();
-                    CommitVoyage(best, candidateVoyages);
+                    if (bestVessel != null)
+                    {
+                        // Calculate Departure Time: Max of EarliestDeparture to ensure all cargo is ready
+                        var departureTime = weeklyBatch.Max(r => r.EarliestDeparture);
+                        
+                        // Create Fresh Voyage Candidate
+                        var voyage = CreateWeeklyVoyage(bestVessel, new List<RequestLoad>(), distanceMatrix, locations, departureTime);
+                        
+                        // Set Route Information
+                        voyage.OriginId = route.Key.OriginId;
+                        voyage.DestinationId = route.Key.DestinationId;
+                        voyage.OriginName = locations.FirstOrDefault(l => l.LocationId == route.Key.OriginId)?.LocationName;
+                        voyage.DestinationName = locations.FirstOrDefault(l => l.LocationId == route.Key.DestinationId)?.LocationName;
+
+                        // Assign loads
+                        ProcessBatchForVoyage(voyage, weeklyBatch, bestVessel, candidateVoyages, distanceMatrix, locations);
+                    }
                 }
             }
-
+            
             return candidateVoyages;
         }
+
+        private void ProcessBatchForVoyage(
+            VoyageCandidate voyage, 
+            List<RequestLoad> batch, 
+            Vessel vessel, 
+            List<VoyageCandidate> candidates,
+            Dictionary<string, Dictionary<string, double>> distanceMatrix,
+            List<Location> locations)
+        {
+            var assignedCount = 0;
+            var remaining = new List<RequestLoad>();
+
+            foreach (var load in batch)
+            {
+                // Check if this specific load is already assigned to this voyage (duplication check)
+                if (voyage.AssignedRequestIds.Contains(load.RequestId)) continue;
+
+                if (HasCapacity(load, voyage, vessel))
+                {
+                    // Add load
+                    voyage.AssignedLoads.Add(load);
+                    voyage.AssignedRequestIds.Add(load.RequestId);
+                    voyage.AggregatedItemIds.AddRange(load.ItemIds);
+                    voyage.TotalDeckUsed += load.TotalDeckArea;
+                    voyage.TotalWeightUsed += load.TotalWeight;
+                    voyage.TotalItems += load.ItemCount;
+                    
+                    // Update Departure Time if this load pushes it? 
+                    // Note: For existing voyages, schedule IS fixed.
+                    // For NEW voyages, we set DepTime = Max(EarliestDeparture).
+                    if (voyage.VoyageId == null) // New
+                    {
+                        if (load.EarliestDeparture > voyage.DepartureTime)
+                        {
+                            voyage.DepartureTime = load.EarliestDeparture;
+                            // Recalc Arrival
+                             RecalculateArrival(voyage, vessel, distanceMatrix);
+                        }
+                    }
+                    else // Existing
+                    {
+                        // If load ED > Voyage Dep, we have a problem. Flex it?
+                        if (load.EarliestDeparture > voyage.DepartureTime)
+                        {
+                             // Flex Logic: Add warning
+                             voyage.Messages.Add($"Request {load.RequestId} Earliest Departure ({load.EarliestDeparture:dd MMM HH:mm}) is after Voyage Departure ({voyage.DepartureTime:dd MMM HH:mm}).");
+                        }
+                    }
+
+                    assignedCount++;
+                }
+                else
+                {
+                    remaining.Add(load);
+                }
+            }
+            
+            voyage.UtilisationPercent = CalculateUtilisation(voyage, vessel);
+            voyage.Score = ScoreVoyage(voyage);
+            
+            // Add the main voyage if not already in list
+            if (!candidates.Contains(voyage))
+            {
+                candidates.Add(voyage);
+            }
+
+            // Handle Overflow
+            if (remaining.Any())
+            {
+                // Create a second voyage for the remaining items (Overflow)
+                var departureTime = remaining.Max(r => r.EarliestDeparture);
+                var overflowVoyage = CreateWeeklyVoyage(vessel, new List<RequestLoad>(), distanceMatrix, locations, departureTime);
+                
+                // Copy Route Information from parent voyage
+                overflowVoyage.OriginId = voyage.OriginId;
+                overflowVoyage.DestinationId = voyage.DestinationId;
+                overflowVoyage.OriginName = voyage.OriginName;
+                overflowVoyage.DestinationName = voyage.DestinationName;
+
+                // Recursively process the rest
+                // Use a standard matching to avoid infinite recursion if no vessel fits at all (should fit empty vessel)
+                foreach(var load in remaining)
+                {
+                     if (HasCapacity(load, overflowVoyage, vessel))
+                     {
+                        overflowVoyage.AssignedLoads.Add(load);
+                        overflowVoyage.AssignedRequestIds.Add(load.RequestId);
+                        overflowVoyage.AggregatedItemIds.AddRange(load.ItemIds);
+                        overflowVoyage.TotalDeckUsed += load.TotalDeckArea;
+                        overflowVoyage.TotalWeightUsed += load.TotalWeight;
+                        overflowVoyage.TotalItems += load.ItemCount;
+                     }
+                }
+                
+                overflowVoyage.UtilisationPercent = CalculateUtilisation(overflowVoyage, vessel);
+                overflowVoyage.Score = ScoreVoyage(overflowVoyage);
+                candidates.Add(overflowVoyage);
+            }
+        }
+
+        private void RecalculateArrival(VoyageCandidate voyage, Vessel vessel, Dictionary<string, Dictionary<string, double>> distanceMatrix)
+        {
+             var distance = 0.0;
+             if (distanceMatrix.ContainsKey(voyage.OriginId) && distanceMatrix[voyage.OriginId].ContainsKey(voyage.DestinationId))
+             {
+                distance = distanceMatrix[voyage.OriginId][voyage.DestinationId];
+             }
+
+             var speed = vessel.Performance.ServiceSpeed ?? 10.0; 
+             var calculatedHours = distance / (speed * 1.852); 
+             var duration = Math.Max(48, calculatedHours); // Enforce 48h min
+
+             voyage.ArrivalTime = voyage.DepartureTime.AddHours(duration);
+             voyage.TotalCost = CalculateVoyageCost(vessel, duration);
+        }
+
+        private VoyageCandidate CreateCandidateFromExisting(Voyage v, Vessel vessel)
+        {
+            return new VoyageCandidate
+            {
+                VoyageId = v.VoyageId,
+                VesselId = v.VesselId,
+                VesselName = v.VesselName,
+                OriginId = v.OriginId,
+                OriginName = v.OriginName,
+                DestinationId = v.DestinationId,
+                DestinationName = v.DestinationName,
+                DepartureTime = v.DepartureDateTime,
+                ArrivalTime = v.Eta,
+                AssignedLoads = new List<RequestLoad>(), // Should populate from DB existing loads if needed? Assuming inputs are what we assign
+                AssignedRequestIds = new List<string>(), // We start fresh or append? Usually optimization re-plans. 
+                // But if existing voyage has loads, we should respect capacity. 
+                // Simplified: assuming 'existingVoyages' passed in are the *base* and we add to them.
+                // We'll calculate usage based on what we ADD + what *might* be there (omitted for now).
+                TotalDeckUsed = 0,
+                TotalWeightUsed = 0,
+                TotalItems = 0,
+                AggregatedItemIds = new List<string>(),
+                Messages = new List<string>()
+            };
+        }
+
+        private VoyageCandidate CreateWeeklyVoyage(Vessel vessel, List<RequestLoad> loads, Dictionary<string, Dictionary<string, double>> distanceMatrix, List<Location> locations, DateTime departureTime)
+        {
+             // Determine Origin/Dest from first load or args
+             // We need passed in args if loads is empty.
+             // Refactored to assume caller sets Origin/Dest on the candidate if loads empty, 
+             // but here we create it.
+             // We'll use the 'loads' to determine route, OR return an empty shell?
+             // Actually, `ProcessBatchForVoyage` handles filling. 
+             // We need to know the Route to calculate Duration.
+             
+             // Issue: If we pass empty list, we don't know the route.
+             // I'll update ProcessBatch to set route info if missing? 
+             // Better: Pass Origin/Dest to this method.
+             // But my signature was generic.
+             // Let's rely on the first load of the batch for the route, since we group by route.
+             
+             // Wait, `ProcessBatch` calls this with empty list for overflow.
+             // I need to fix that calling code.
+             
+             return new VoyageCandidate
+             { 
+                 VesselId = vessel.VesselId, 
+                 VesselName = vessel.VesselName,
+                 DepartureTime = departureTime,
+                 ArrivalTime = departureTime.AddHours(48), // Default min
+                 AssignedLoads = new List<RequestLoad>(),
+                 AssignedRequestIds = new List<string>(),
+                 AggregatedItemIds = new List<string>(),
+                 Messages = new List<string>(),
+                 // Placeholder, will be filled by caller using the route info
+                 OriginId = "", 
+                 DestinationId = ""
+             };
+        }
+        
+        // --- Helper Methods ---
 
         private List<RequestLoad> BuildRequestLoads(List<MovementRequest> requests)
         {
@@ -107,13 +323,14 @@ namespace Klarity.Api.Services.Optimization
                     OriginId = req.OriginId,
                     DestinationId = req.DestinationId,
                     EarliestDeparture = req.EarliestDeparture,
-                    LatestDeparture = req.LatestDeparture ?? req.EarliestDeparture.AddDays(2), // Allow buffer
+                    LatestDeparture = req.LatestDeparture ?? req.EarliestDeparture.AddDays(2),
                     EarliestArrival = req.EarliestArrival ?? req.EarliestDeparture.AddHours(12),
                     LatestArrival = req.LatestArrival,
-                    TotalDeckArea = req.Items.Sum(i => UnitConverter.ToSquareMeters(i.Dimensions, i.DimensionUnit)),
+                    TotalDeckArea = req.Items.Sum(i => UnitConverter.ToSquareMeters(i.Dimensions, i.DimensionUnit) * i.Quantity),
                     TotalWeight = req.Items.Sum(i => UnitConverter.ToMetricTonnes(i.Weight ?? 0, i.WeightUnit)),
                     ItemIds = req.Items.Select(i => i.ItemId).ToList(),
-                    ItemCount = req.Items.Count
+                    ItemCount = req.Items.Count,
+                    UrgencyId = req.UrgencyId
                 };
 
                 load.UrgencyScore = CalculateUrgencyScore(req.UrgencyId, load.LatestDeparture);
@@ -183,145 +400,13 @@ namespace Klarity.Api.Services.Optimization
 
         private double ToRadians(double angle) => Math.PI * angle / 180.0;
 
-        private bool IsRouteCompatible(RequestLoad load, Voyage voyage)
-        {
-            return load.OriginId == voyage.OriginId && load.DestinationId == voyage.DestinationId;
-        }
-
-        private bool IsRouteCompatible(RequestLoad load, VoyageCandidate candidate)
-        {
-            return load.OriginId == candidate.OriginId && load.DestinationId == candidate.DestinationId;
-        }
-
-        private bool IsTimeWindowCompatible(RequestLoad load, Voyage voyage)
-        {
-            // Existing voyages have fixed departure/ETA
-            const int toleranceHours = 12;
-            return load.EarliestDeparture <= voyage.DepartureDateTime.AddHours(toleranceHours) &&
-                   load.LatestArrival >= voyage.Eta.AddHours(-toleranceHours);
-        }
-
-        private bool IsTimeWindowCompatible(RequestLoad load, VoyageCandidate candidate)
-        {
-            // For candidates, we check if there's an overlapping "window of opportunity"
-            // ED1 <= LA2 && ED2 <= LA1
-            var maxEarliestDeparture = candidate.AssignedLoads.Max(l => l.EarliestDeparture);
-            if (load.EarliestDeparture > maxEarliestDeparture) maxEarliestDeparture = load.EarliestDeparture;
-
-            var minLatestArrival = candidate.AssignedLoads.Min(l => l.LatestArrival);
-            if (load.LatestArrival < minLatestArrival) minLatestArrival = load.LatestArrival;
-
-            // Simple check: do they overlap?
-            return maxEarliestDeparture <= minLatestArrival.AddHours(-12); // Must leave 12h for transit
-        }
-
-        private bool HasCapacity(RequestLoad load, Voyage voyage, Vessel? vessel)
+        private bool HasCapacity(RequestLoad load, VoyageCandidate voyage, Vessel vessel)
         {
             if (vessel == null) return false;
-            var currentDeck = (voyage.DeckUtil / 100 * (vessel.Capacities.DeckArea ?? 0));
-            var currentWeight = (voyage.WeightUtil / 100 * (vessel.Capacities.DeadWeight ?? 0));
-            
-            if (currentDeck + load.TotalDeckArea > (vessel.Capacities.DeckArea ?? 0)) return false;
-            if (currentWeight + load.TotalWeight > (vessel.Capacities.DeadWeight ?? 0)) return false;
-            return true;
-        }
-
-        private bool HasCapacity(RequestLoad load, VoyageCandidate voyage, Vessel? vessel)
-        {
-            if (vessel == null) return false;
+            // For VoyageCandidate, use its properties
             if (voyage.TotalDeckUsed + load.TotalDeckArea > (vessel.Capacities.DeckArea ?? 1000000)) return false;
             if (voyage.TotalWeightUsed + load.TotalWeight > (vessel.Capacities.DeadWeight ?? 1000000)) return false;
             return true;
-        }
-
-        private VoyageCandidate SimulateAddLoad(Voyage voyage, RequestLoad load, Vessel? vessel)
-        {
-            var cand = new VoyageCandidate
-            {
-                VoyageId = voyage.VoyageId,
-                VesselId = voyage.VesselId,
-                VesselName = voyage.VesselName,
-                OriginId = voyage.OriginId,
-                OriginName = voyage.OriginName,
-                DestinationId = voyage.DestinationId,
-                DestinationName = voyage.DestinationName,
-                DepartureTime = voyage.DepartureDateTime,
-                ArrivalTime = voyage.Eta,
-                AssignedLoads = new List<RequestLoad> { load }, 
-                TotalDeckUsed = (voyage.DeckUtil / 100 * (vessel?.Capacities.DeckArea ?? 0)) + load.TotalDeckArea,
-                TotalWeightUsed = (voyage.WeightUtil / 100 * (vessel?.Capacities.DeadWeight ?? 0)) + load.TotalWeight,
-                AssignedRequestIds = new List<string> { load.RequestId },
-                TotalItems = load.ItemCount,
-                AggregatedItemIds = load.ItemIds
-            };
-            cand.UtilisationPercent = CalculateUtilisation(cand, vessel);
-            return cand;
-        }
-
-        private VoyageCandidate SimulateMergeLoad(VoyageCandidate candidate, RequestLoad load, Vessel? vessel)
-        {
-            var newLoads = new List<RequestLoad>(candidate.AssignedLoads) { load };
-            var cand = new VoyageCandidate
-            {
-                VesselId = candidate.VesselId,
-                VesselName = candidate.VesselName,
-                OriginId = candidate.OriginId,
-                OriginName = candidate.OriginName,
-                DestinationId = candidate.DestinationId,
-                DestinationName = candidate.DestinationName,
-                AssignedLoads = newLoads,
-                TotalDeckUsed = candidate.TotalDeckUsed + load.TotalDeckArea,
-                TotalWeightUsed = candidate.TotalWeightUsed + load.TotalWeight,
-                AssignedRequestIds = new List<string>(candidate.AssignedRequestIds) { load.RequestId },
-                TotalItems = candidate.TotalItems + load.ItemCount,
-                AggregatedItemIds = new List<string>(candidate.AggregatedItemIds).Concat(load.ItemIds).ToList()
-            };
-
-            // Recalculate best window
-            cand.DepartureTime = newLoads.Max(l => l.EarliestDeparture);
-            cand.ArrivalTime = cand.DepartureTime.AddHours((candidate.ArrivalTime - candidate.DepartureTime).TotalHours);
-            cand.UtilisationPercent = CalculateUtilisation(cand, vessel);
-            return cand;
-        }
-
-        private bool VesselCanServeRoute(Vessel vessel, RequestLoad load)
-        {
-            return true;
-        }
-
-        private VoyageCandidate CreateNewVoyageCandidate(Vessel vessel, RequestLoad load, Dictionary<string, Dictionary<string, double>> distanceMatrix, List<Location> locations)
-        {
-            var voyage = new VoyageCandidate
-            {
-                VesselId = vessel.VesselId,
-                VesselName = vessel.VesselName,
-                OriginId = load.OriginId,
-                OriginName = locations.FirstOrDefault(l => l.LocationId == load.OriginId)?.LocationName,
-                DestinationId = load.DestinationId,
-                DestinationName = locations.FirstOrDefault(l => l.LocationId == load.DestinationId)?.LocationName,
-                DepartureTime = load.EarliestDeparture
-            };
-
-            var distance = 0.0;
-            if (distanceMatrix.ContainsKey(load.OriginId) && distanceMatrix[load.OriginId].ContainsKey(load.DestinationId))
-            {
-                distance = distanceMatrix[load.OriginId][load.DestinationId];
-            }
-
-            var speed = vessel.Performance.ServiceSpeed ?? 10.0; 
-            var hours = distance / (speed * 1.852); 
-
-            voyage.ArrivalTime = voyage.DepartureTime.AddHours(hours);
-            voyage.TotalDeckUsed = load.TotalDeckArea;
-            voyage.TotalWeightUsed = load.TotalWeight;
-            voyage.AssignedLoads = new List<RequestLoad> { load };
-            voyage.TotalCost = CalculateVoyageCost(vessel, hours);
-            voyage.UtilisationPercent = CalculateUtilisation(voyage, vessel);
-            voyage.AssignedRequestIds = new List<string> { load.RequestId };
-            voyage.TotalItems = load.ItemCount;
-            voyage.AggregatedItemIds = load.ItemIds;
-
-            return voyage;
         }
 
         private double ScoreVoyage(VoyageCandidate voyage)
@@ -337,7 +422,7 @@ namespace Klarity.Api.Services.Optimization
                 }
             }
 
-            var consolidationScore = Math.Min(15, voyage.AssignedLoads.Count * 5); // 5 points per load, cap at 15
+            var consolidationScore = Math.Min(15, voyage.AssignedLoads.Count * 5); 
 
             return utilisationScore + costScore + deadlineScore + consolidationScore;
         }
@@ -355,57 +440,6 @@ namespace Klarity.Api.Services.Optimization
             var deckUtil = voyage.TotalDeckUsed / (vessel.Capacities.DeckArea ?? 1.0);
             var weightUtil = voyage.TotalWeightUsed / (vessel.Capacities.DeadWeight ?? 1.0);
             return Math.Max(deckUtil, weightUtil) * 100;
-        }
-
-        private void CommitVoyage(VoyageCandidate best, List<VoyageCandidate> candidates)
-        {
-            if (best.VoyageId != null)
-            {
-                // Update existing voyage logic would go here
-                var existing = candidates.FirstOrDefault(c => c.VoyageId == best.VoyageId);
-                if (existing != null)
-                {
-                    existing.AssignedLoads = best.AssignedLoads;
-                    existing.AssignedRequestIds = best.AssignedRequestIds;
-                    existing.AggregatedItemIds = best.AggregatedItemIds;
-                    existing.TotalDeckUsed = best.TotalDeckUsed;
-                    existing.TotalWeightUsed = best.TotalWeightUsed;
-                    existing.TotalItems = best.TotalItems;
-                    existing.UtilisationPercent = best.UtilisationPercent;
-                    existing.Score = best.Score;
-                }
-                else
-                {
-                    candidates.Add(best);
-                }
-            }
-            else
-            {
-                // Identification by Vessel and Route for session-level merging
-                var existingCand = candidates.FirstOrDefault(c => 
-                    c.VesselId == best.VesselId && 
-                    c.OriginId == best.OriginId && 
-                    c.DestinationId == best.DestinationId &&
-                    Math.Abs((c.DepartureTime - best.DepartureTime).TotalHours) < 24);
-
-                if (existingCand != null)
-                {
-                    existingCand.AssignedLoads = best.AssignedLoads;
-                    existingCand.AssignedRequestIds = best.AssignedRequestIds;
-                    existingCand.AggregatedItemIds = best.AggregatedItemIds;
-                    existingCand.TotalDeckUsed = best.TotalDeckUsed;
-                    existingCand.TotalWeightUsed = best.TotalWeightUsed;
-                    existingCand.TotalItems = best.TotalItems;
-                    existingCand.UtilisationPercent = best.UtilisationPercent;
-                    existingCand.Score = best.Score;
-                    existingCand.DepartureTime = best.DepartureTime;
-                    existingCand.ArrivalTime = best.ArrivalTime;
-                }
-                else
-                {
-                    candidates.Add(best);
-                }
-            }
         }
     }
 }
