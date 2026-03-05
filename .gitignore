@@ -3,3 +3,8 @@ klarity.api/bin/
 klarity.api/obj/
 klarity.api/logs/
 klarity.api/publish/
+klarity.api/publish-backend/
+klarity.api/publish-sc/
+node_modules/
+dist/
+.DS_Store
