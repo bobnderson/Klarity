@@ -52,8 +52,8 @@ public class MovementRequestRepository : IMovementRequestRepository
                        r.trip_type, r.departure_flight_id as selected_voyage_id, r.return_flight_id as return_voyage_id,
                        r.approver_id, r.approved_at, r.approver_comments,
                        
-                       f_out.departure_date_time as ScheduledDeparture, f_out.eta as ScheduledArrival,
-                       f_ret.departure_date_time as ReturnScheduledDeparture, f_ret.eta as ReturnScheduledArrival,
+                       f_out.plan_depart as ScheduledDeparture, f_out.plan_arrive as ScheduledArrival,
+                       f_ret.plan_depart as ReturnScheduledDeparture, f_ret.plan_arrive as ReturnScheduledArrival,
 
                        u.urgency_label as Urgency,
                        loc_o.location_name as OriginName, loc_d.location_name as DestinationName,
@@ -265,8 +265,8 @@ public class MovementRequestRepository : IMovementRequestRepository
                        r.trip_type, r.departure_flight_id as selected_voyage_id, r.return_flight_id as return_voyage_id,
                        r.approver_id, r.approved_at, r.approver_comments,
                        
-                       f_out.departure_date_time as ScheduledDeparture, f_out.eta as ScheduledArrival,
-                       f_ret.departure_date_time as ReturnScheduledDeparture, f_ret.eta as ReturnScheduledArrival,
+                       f_out.plan_depart as ScheduledDeparture, f_out.plan_arrive as ScheduledArrival,
+                       f_ret.plan_depart as ReturnScheduledDeparture, f_ret.plan_arrive as ReturnScheduledArrival,
 
                        u.urgency_label as Urgency,
                        loc_o.location_name as OriginName, loc_d.location_name as DestinationName,
@@ -367,8 +367,8 @@ public class MovementRequestRepository : IMovementRequestRepository
                        r.business_unit_id, r.cost_centre, r.comments,
                        r.trip_type, r.departure_flight_id as selected_voyage_id, r.return_flight_id as return_voyage_id,
                        r.approver_id, r.approved_at, r.approver_comments,
-                       f_out.departure_date_time as ScheduledDeparture, f_out.eta as ScheduledArrival,
-                       f_ret.departure_date_time as ReturnScheduledDeparture, f_ret.eta as ReturnScheduledArrival,
+                       f_out.plan_depart as ScheduledDeparture, f_out.plan_arrive as ScheduledArrival,
+                       f_ret.plan_depart as ReturnScheduledDeparture, f_ret.plan_arrive as ReturnScheduledArrival,
                        u.urgency_label as Urgency,
                        loc_o.location_name as OriginName, loc_d.location_name as DestinationName,
                        i.item_id, i.request_id, i.item_type_id, i.quantity, 
@@ -745,10 +745,10 @@ public class MovementRequestRepository : IMovementRequestRepository
             const string insertFlightSql = @"
                 INSERT INTO aviation.flights (
                     flight_id, schedule_id, pax_current, status_id, is_deleted, plan_depart, plan_arrive,
-                    origin_id, destination_id, departure_date_time, eta, pax_capacity -- Keeping existing cols populated too
+                    origin_id, destination_id, pax_capacity -- Keeping existing cols populated too
                 ) VALUES (
                     @newFlightId, @scheduleId, @paxCount, 'Scheduled', 0, @scheduleTime, @planArrive,
-                    @originId, @destinationId, @scheduleTime, @planArrive, 12
+                    @originId, @destinationId, 12
                 );";
 
             await connection.ExecuteAsync(insertFlightSql, new

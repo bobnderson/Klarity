@@ -581,6 +581,9 @@ export function HelicopterDesign({
   const [formData, setFormData] = useState<Helicopter>({
     helicopterId: "",
     helicopterName: "",
+    vesselId: "",
+    vesselName: "",
+    voyages: [],
     helicopterTypeId: "",
     statusId: "Active",
     cruiseAirspeedKts: 0,

@@ -2,14 +2,14 @@ using Klarity.Api.Attributes;
 using Klarity.Api.Data;
 using Klarity.Api.Models;
 using Klarity.Api.Services;
-using Microsoft.AspNetCore.Authorization;
+using Klarity.Api.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Klarity.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[TokenAuthorize]
 [ValidateModel]
 public class UsersController : ControllerBase
 {

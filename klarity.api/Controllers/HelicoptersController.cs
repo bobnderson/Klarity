@@ -1,13 +1,13 @@
 using Klarity.Api.Data;
 using Klarity.Api.Models;
-using Microsoft.AspNetCore.Authorization;
+using Klarity.Api.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Klarity.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize]
+[TokenAuthorize]
 public class HelicoptersController : ControllerBase
 {
     private readonly IHelicopterRepository _helicopterRepository;

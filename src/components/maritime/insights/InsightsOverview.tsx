@@ -20,7 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
-import type { Vessel } from "../../../types/maritime/marine";
+import type { UnifiedVessel } from "../../../types/maritime/marine";
 import type { MovementRequest } from "../../../types/maritime/logistics";
 import type {
   RecommendationSummary,
@@ -29,7 +29,7 @@ import type {
 import dayjs from "dayjs";
 
 interface InsightsOverviewProps {
-  vessels: Vessel[];
+  vessels: UnifiedVessel[];
   requests: MovementRequest[];
   processingRecId: string | null;
   recommendationData: RecommendationSummary | null;

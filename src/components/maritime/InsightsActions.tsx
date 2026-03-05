@@ -3,12 +3,12 @@ import { Box, CircularProgress, Typography } from "@mui/material";
 import { InsightsOverview } from "./insights/InsightsOverview";
 import { InsightsVessel } from "./insights/InsightsVessel";
 import { InsightsCargo } from "./insights/InsightsCargo";
-import type { Vessel } from "../../types/maritime/marine";
+import type { UnifiedVessel } from "../../types/maritime/marine";
 import type { MovementRequest } from "../../types/maritime/logistics";
 import type { RecommendationSummary } from "../../services/maritime/recommendationService";
 
 interface InsightsActionsProps {
-  vessels: Vessel[];
+  vessels: UnifiedVessel[];
   requests: MovementRequest[];
   isAnalyzing: boolean;
   processingRecId: string | null;

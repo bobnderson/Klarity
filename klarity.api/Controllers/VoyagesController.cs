@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+using Klarity.Api.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Klarity.Api.Models;
 using Klarity.Api.Models.Optimization;
@@ -9,7 +9,7 @@ using Klarity.Api.Services.Optimization;
 
 namespace Klarity.Api.Controllers;
 
-[Authorize]
+[TokenAuthorize]
 [ApiController]
 [Route("api/[controller]")]
 public class VoyagesController : ControllerBase

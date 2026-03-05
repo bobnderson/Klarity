@@ -5,7 +5,6 @@ using System.Text;
 using Dapper;
 using Klarity.Api.Data;
 using Klarity.Api.Models;
-using Microsoft.AspNetCore.Authentication.Negotiate;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -20,21 +19,23 @@ public class AuthController : ControllerBase
     private readonly ILogger<AuthController> _logger;
     private readonly Services.IAuditService _auditService;
     private readonly Data.IAuthRepository _authRepository;
+    private readonly Utils.Security _security;
 
     public AuthController(
         IConfiguration configuration,
         ILogger<AuthController> logger,
         Services.IAuditService auditService,
-        Data.IAuthRepository authRepository)
+        Data.IAuthRepository authRepository,
+        Utils.Security security)
     {
         _configuration = configuration;
         _logger = logger;
         _auditService = auditService;
         _authRepository = authRepository;
+        _security = security;
     }
 
     [HttpGet("login")]
-    [AllowAnonymous]
     public async Task<IActionResult> Login()
     {
         var samAccountNameResult = ResolveAccountName();
@@ -72,7 +73,7 @@ public class AuthController : ControllerBase
             }
 
             response.Menus = BuildHierarchicalMenu(loginData.Menus);
-            response.Jwt = GenerateJwtToken(response.AccountId, response.Roles);
+            response.Jwt = _security.GenerateToken(new { AccountId = response.AccountId, Roles = response.Roles });
 
             await _authRepository.UpdateLastLoginAsync(samAccountName);
             await _auditService.LogAsync(samAccountName, "Login", true, "Auth");
@@ -158,31 +159,5 @@ public class AuthController : ControllerBase
         return menus;
     }
 
-    private string GenerateJwtToken(string accountId, List<UserRoleConfig> roles)
-    {
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"] ?? "SecretKeyForKlarityAppAuth2025!Fix"));
-        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-        var claims = new List<Claim>
-        {
-            new Claim(JwtRegisteredClaimNames.Sub, accountId),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
-        };
-
-        foreach (var role in roles)
-        {
-            claims.Add(new Claim(ClaimTypes.Role, role.RoleName));
-            claims.Add(new Claim("roleId", role.RoleId));
-        }
-
-        var token = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"] ?? "KlarityApi",
-            audience: _configuration["Jwt:Audience"] ?? "KlarityClient",
-            claims: claims,
-            notBefore: DateTime.UtcNow,
-            expires: DateTime.UtcNow.AddHours(8),
-            signingCredentials: credentials);
-
-        return new JwtSecurityTokenHandler().WriteToken(token);
-    }
 }

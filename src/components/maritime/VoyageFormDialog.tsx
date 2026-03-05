@@ -23,6 +23,7 @@ import type {
   UnifiedVessel,
   UnifiedVoyage,
   VoyageStop,
+  Voyage,
 } from "../../types/maritime/marine";
 import type { Flight } from "../../types/aviation/flight";
 import { getVessels } from "../../services/maritime/vesselService";

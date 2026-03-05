@@ -42,15 +42,15 @@ public class ActiveDirectoryService : IActiveDirectoryService
     {
         var mockUsers = new List<AdUserDto>
         {
-            new() { SamAccountName = "ogbole.oghedegbe", DisplayName = "Ogbole Oghedegbe", Email = "ogbole.oghedegbe@shell.com" },
-            new() { SamAccountName = "bobby.ekpo", DisplayName = "Bobby Ekpo", Email = "bobby.ekpo@shell.com" },
-            new() { SamAccountName = "matthew.ogisi", DisplayName = "Matthew Ogisi", Email = "matthew.ogisi@shell.com" },
-            new() { SamAccountName = "musa.mikail", DisplayName = "Musa Mikail", Email = "musa.mikail@shell.com" },
-             new() { SamAccountName = "ofonbuck.ubong", DisplayName = "Ofonbuck Ubong", Email = "ofonbuck.ubong@shell.com" }
+            new() { SamAccountName = "a.a", DisplayName = "a, a", Email = "a.a@shell.com" },
+            new() { SamAccountName = "b.b", DisplayName = "b, b", Email = "b.b@shell.com" },
+            new() { SamAccountName = "m.o", DisplayName = "m, o", Email = "m.o@shell.com" },
+            new() { SamAccountName = "m.m", DisplayName = "m, m", Email = "m.m@shell.com" },
+             new() { SamAccountName = "o.u", DisplayName = "O, U", Email = "o.u@shell.com" }
         };
 
-        return mockUsers.Where(u => 
-            u.SamAccountName.Contains(query, StringComparison.OrdinalIgnoreCase) || 
+        return mockUsers.Where(u =>
+            u.SamAccountName.Contains(query, StringComparison.OrdinalIgnoreCase) ||
             u.DisplayName.Contains(query, StringComparison.OrdinalIgnoreCase));
     }
 
@@ -62,20 +62,20 @@ public class ActiveDirectoryService : IActiveDirectoryService
         try
         {
             // Bind to the default domain
-            using var dEntry = new DirectoryEntry(); 
+            using var dEntry = new DirectoryEntry();
             using var dSearcher = new DirectorySearcher(dEntry);
 
             dSearcher.PropertiesToLoad.Add("displayName");
             dSearcher.PropertiesToLoad.Add("givenName");
             dSearcher.PropertiesToLoad.Add("mail");
             dSearcher.PropertiesToLoad.Add("sAMAccountName");
-            dSearcher.PageSize = 20; 
+            dSearcher.PageSize = 20;
             dSearcher.SizeLimit = 20;
             dSearcher.SearchScope = SearchScope.Subtree;
 
             // Using ANR (Ambiguous Name Resolution) for optimized search on name and email
             string sanitizedQuery = EscapeLdapSearchFilter(query.Trim());
-            
+
             // Filter: Users only, match query via ANR, and restrict to specific employee types if needed (optional)
             // Note: The user provided filter included employeeType checks. I will include them but make them optional/inclusive if that's the intent.
             // "(|(employeeType=C)(employeeType=S)(employeeType=F))" implies checking for these types.
@@ -124,7 +124,7 @@ public class ActiveDirectoryService : IActiveDirectoryService
 
     private string EscapeLdapSearchFilter(string searchFilter)
     {
-        StringBuilder escape = new StringBuilder(); 
+        StringBuilder escape = new StringBuilder();
         foreach (char c in searchFilter)
         {
             switch (c)

@@ -6,10 +6,13 @@ using Klarity.Api.Models.Aviation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
+using Klarity.Api.Utils;
+
 namespace Klarity.Api.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [TokenAuthorize]
     public class FlightSchedulesController : ControllerBase
     {
         private readonly IFlightScheduleRepository _repository;

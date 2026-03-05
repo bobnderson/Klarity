@@ -1,6 +1,13 @@
 import { useState, useEffect } from "react";
 import { Box, Typography, Grid } from "@mui/material";
-import type { Vessel, Voyage } from "../../types/maritime/marine";
+import type {
+  Vessel,
+  Voyage,
+  UnifiedVessel,
+  UnifiedVoyage,
+  Helicopter,
+} from "../../types/maritime/marine";
+import type { Flight } from "../../types/aviation/flight";
 import type { MovementRequest } from "../../types/maritime/logistics";
 import { HelicopterView2D } from "./HelicopterView2D";
 import { formatNumber } from "../../utils/formatters";
@@ -8,8 +15,8 @@ import { getVoyageManifest } from "../../services/maritime/voyageService";
 import { toast } from "react-toastify";
 
 interface HelicopterLayoutProps {
-  vessel: Vessel | undefined;
-  voyage: Voyage | undefined;
+  vessel: UnifiedVessel | undefined;
+  voyage: UnifiedVoyage | undefined;
 }
 
 export function HelicopterLayout({ vessel, voyage }: HelicopterLayoutProps) {
@@ -18,10 +25,12 @@ export function HelicopterLayout({ vessel, voyage }: HelicopterLayoutProps) {
 
   useEffect(() => {
     const fetchManifest = async () => {
-      if (!voyage?.voyageId) return;
+      const voyageId =
+        (voyage as Voyage)?.voyageId || (voyage as Flight)?.flightId;
+      if (!voyageId) return;
       setLoading(true);
       try {
-        const data = await getVoyageManifest(voyage.voyageId);
+        const data = await getVoyageManifest(voyageId);
         setManifest(data);
       } catch (error) {
         console.error("Failed to fetch manifest:", error);
@@ -31,9 +40,22 @@ export function HelicopterLayout({ vessel, voyage }: HelicopterLayoutProps) {
       }
     };
     fetchManifest();
-  }, [voyage?.voyageId, voyage?.weightUtil, voyage?.deckUtil]);
+  }, [
+    (voyage as Voyage)?.voyageId || (voyage as Flight)?.flightId,
+    (voyage as Voyage)?.weightUtil || (voyage as Flight)?.payloadUtil,
+    voyage?.cabinUtil,
+  ]);
 
   if (!vessel || !voyage) return null;
+
+  const voyageId = (voyage as Voyage).voyageId || (voyage as Flight).flightId;
+  const weightUtil =
+    (voyage as Voyage).weightUtil ?? (voyage as Flight).payloadUtil ?? 0;
+  const cabinUtil = voyage.cabinUtil || 0;
+  const paxCapacity =
+    (vessel as Helicopter).passengerSeats ||
+    (vessel as Vessel).capacities?.totalComplement ||
+    0;
 
   return (
     <section className="panel-container deck-layout-section">
@@ -64,11 +86,11 @@ export function HelicopterLayout({ vessel, voyage }: HelicopterLayoutProps) {
             >
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Payload Utilisation</span>
-                <span>{formatNumber(voyage.weightUtil, 1)}%</span>
+                <span>{formatNumber(weightUtil, 1)}%</span>
               </Box>
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Seat Utilisation</span>
-                <span>{formatNumber(voyage.cabinUtil, 1)}%</span>
+                <span>{formatNumber(cabinUtil, 1)}%</span>
               </Box>
               <Box sx={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Pax Count</span>
@@ -76,7 +98,7 @@ export function HelicopterLayout({ vessel, voyage }: HelicopterLayoutProps) {
                   {manifest.reduce((sum, req) => {
                     const items = req.items?.filter(
                       (i) =>
-                        i.assignedVoyageId === voyage.voyageId &&
+                        i.assignedVoyageId === voyageId &&
                         i.categoryId === "personnel",
                     );
                     return (
@@ -85,7 +107,7 @@ export function HelicopterLayout({ vessel, voyage }: HelicopterLayoutProps) {
                     );
                   }, 0)}
                   {" / "}
-                  {vessel.capacities?.totalComplement || 0}
+                  {paxCapacity}
                 </span>
               </Box>
 

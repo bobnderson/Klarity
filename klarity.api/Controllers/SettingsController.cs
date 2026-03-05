@@ -1,10 +1,10 @@
 using Klarity.Api.Data;
-using Microsoft.AspNetCore.Authorization;
+using Klarity.Api.Utils;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Klarity.Api.Controllers
 {
-    [Authorize]
+    [TokenAuthorize]
     [ApiController]
     [Route("api/[controller]")]
     public class SettingsController : ControllerBase

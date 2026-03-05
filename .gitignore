@@ -1,0 +1,5 @@
+klarity.api/appsettings*.json
+klarity.api/bin/
+klarity.api/obj/
+klarity.api/logs/
+klarity.api/publish/

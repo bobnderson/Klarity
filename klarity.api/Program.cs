@@ -59,15 +59,13 @@ builder.Services.AddMemoryCache();
     {
         options.SwaggerDoc("v1", new OpenApiInfo { Title = "Klarity API", Version = "v1" });
         
-        // Add JWT Authentication to Swagger
-        options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+        // Use X-Auth-Token to avoid collision with IIS Windows Auth headers
+        options.AddSecurityDefinition("X-Auth-Token", new OpenApiSecurityScheme
         {
-            Name = "Authorization",
-            Type = SecuritySchemeType.Http,
-            Scheme = "Bearer",
-            BearerFormat = "JWT",
+            Name = "X-Auth-Token",
+            Type = SecuritySchemeType.ApiKey,
             In = ParameterLocation.Header,
-            Description = "Enter your JWT token in the text box below. Example: 'your-token-here'"
+            Description = "Enter the encrypted token from the login response."
         });
 
         options.AddSecurityRequirement(new OpenApiSecurityRequirement
@@ -75,20 +73,26 @@ builder.Services.AddMemoryCache();
             {
                 new OpenApiSecurityScheme
                 {
-                    Reference = new OpenApiReference
-                    {
-                        Type = ReferenceType.SecurityScheme,
-                        Id = "Bearer"
-                    }
+                    Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "X-Auth-Token" }
                 },
                 Array.Empty<string>()
             }
         });
     });
 
+    // Register Security Utility
+    builder.Services.AddSingleton<Klarity.Api.Utils.Security>();
+
     // Register IDbConnectionFactory
-    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ?? string.Empty;
-    builder.Services.AddSingleton<IDbConnectionFactory>(new DbConnectionFactory(connectionString));
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+    }
+    
+    // We pass the singleton Security instance to the factory
+    builder.Services.AddSingleton<IDbConnectionFactory>(sp => 
+        new DbConnectionFactory(connectionString, sp.GetRequiredService<Klarity.Api.Utils.Security>()));
     
     builder.Services.AddScoped<Klarity.Api.Services.IAuditService, Klarity.Api.Services.AuditService>();
     builder.Services.AddScoped<Klarity.Api.Data.IAuthRepository, Klarity.Api.Data.AuthRepository>();
@@ -106,34 +110,20 @@ builder.Services.AddScoped<Klarity.Api.Services.IPdfService, Klarity.Api.Service
 
     builder.Services.AddScoped<Klarity.Api.Data.IFlightScheduleRepository, Klarity.Api.Data.FlightScheduleRepository>();
 
-    // Configure Authentication
-    builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddNegotiate() // Windows Authentication
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "KlarityApi",
-            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "KlarityClient",
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "SecretKeyForKlarityAppAuth2025!Fix")),
-            ClockSkew = TimeSpan.Zero
-        };
-    });
+    // builder.Services.AddAuthentication(); 
 
-    builder.Services.AddAuthorization();
+    // builder.Services.Configure<IISServerOptions>(options =>
+    // {
+    //     options.AutomaticAuthentication = true;
+    // });
+
+    // builder.Services.AddAuthorization();
 
     var app = builder.Build();
 
     // Configure the HTTP request pipeline.
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
     app.UseSerilogRequestLogging();
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -145,49 +135,7 @@ builder.Services.AddScoped<Klarity.Api.Services.IPdfService, Klarity.Api.Service
     app.UseAuthorization();
 
     app.MapControllers();
-
-    // Apply migrations
-    try
-    {
-        using (var scope = app.Services.CreateScope())
-        {
-            var dbFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
-            var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-            
-            var migrationsDir = Path.Combine(app.Environment.ContentRootPath, "Data", "Migrations");
-            if (Directory.Exists(migrationsDir))
-            {
-                var migrationFiles = Directory.GetFiles(migrationsDir, "*.sql").OrderBy(f => f);
-                foreach (var migrationFile in migrationFiles)
-                {
-                    logger.LogInformation("Checking migration: {MigrationFile}", Path.GetFileName(migrationFile));
-                    var sql = File.ReadAllText(migrationFile);
-                    
-                    // SQL Server batch separator 'GO' should be on its own line
-                    var commands = System.Text.RegularExpressions.Regex.Split(sql, @"^\s*GO\s*$", System.Text.RegularExpressions.RegexOptions.Multiline | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                    
-                    using (var connection = dbFactory.CreateConnection())
-                    {
-                        connection.Open();
-                        foreach (var cmd in commands)
-                        {
-                            if (string.IsNullOrWhiteSpace(cmd)) continue;
-                            try {
-                                connection.Execute(cmd);
-                            } catch (Exception ex) {
-                                logger.LogWarning("Error executing command in {MigrationFile}: {Error}", Path.GetFileName(migrationFile), ex.Message);
-                            }
-                        }
-                    }
-                    logger.LogInformation("Migration {MigrationFile} processed.", Path.GetFileName(migrationFile));
-                }
-            }
-        }
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "Failed to apply migrations on startup");
-    }
+    app.MapFallbackToFile("index.html");
 
     // Health check / Test endpoints
     app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow }));

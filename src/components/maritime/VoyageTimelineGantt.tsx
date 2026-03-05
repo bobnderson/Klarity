@@ -2,7 +2,7 @@ import React, { useRef } from "react";
 import dayjs, { Dayjs } from "dayjs";
 import { Box, Typography, Tooltip } from "@mui/material";
 import { Ship, Plane } from "lucide-react";
-import type { UnifiedVessel, UnifiedVoyage } from "../../types/maritime/marine";
+import type { UnifiedVessel } from "../../types/maritime/marine";
 import { CARGO_TYPE_CONFIG } from "../../types/maritime/marine";
 
 interface VoyageTimelineGanttProps {

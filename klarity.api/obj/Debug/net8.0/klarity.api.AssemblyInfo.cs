@@ -10,11 +10,10 @@
 using System;
 using System.Reflection;
 
-[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("bc7562d5-1326-4274-aae7-0a2952a4fec2")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("klarity.api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b2eabd8fe88e3824bc236de738d8787e08e3c43a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e411efb8a78e51a4314cf74a2db1a203d7a88067")]
 [assembly: System.Reflection.AssemblyProductAttribute("klarity.api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("klarity.api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

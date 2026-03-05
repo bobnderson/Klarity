@@ -1,18 +1,23 @@
-import { useRef, useEffect } from "react";
-import type { Vessel, Voyage } from "../../types/maritime/marine";
+import { useRef } from "react";
+import type {
+  Vessel,
+  UnifiedVessel,
+  UnifiedVoyage,
+  Helicopter,
+} from "../../types/maritime/marine";
 import type { MovementRequest } from "../../types/maritime/logistics";
 
 interface HelicopterView2DProps {
-  vessel: Vessel;
-  voyage: Voyage;
+  vessel: UnifiedVessel;
+  voyage: UnifiedVoyage;
   manifest: MovementRequest[];
   loading?: boolean;
 }
 
 export function HelicopterView2D({
   vessel,
-  voyage,
-  manifest,
+  voyage: _voyage,
+  manifest: _manifest,
   loading,
 }: HelicopterView2DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -53,7 +58,13 @@ export function HelicopterView2D({
       )}
       <div style={{ textAlign: "center", color: "#666" }}>
         <h3>Helicopter Layout: {vessel.vesselName}</h3>
-        <p>Capacity: {vessel.capacities?.totalComplement || 0} Passengers</p>
+        <p>
+          Capacity:{" "}
+          {(vessel as Helicopter).passengerSeats ||
+            (vessel as Vessel).capacities?.totalComplement ||
+            0}{" "}
+          Passengers
+        </p>
         <div
           style={{
             marginTop: 20,

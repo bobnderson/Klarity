@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+using Klarity.Api.Utils;
 using Microsoft.AspNetCore.Mvc;
 using Klarity.Api.Models;
 using Klarity.Api.Data;
@@ -7,7 +7,7 @@ using Klarity.Api.Services;
 
 namespace Klarity.Api.Controllers;
 
-[Authorize]
+[TokenAuthorize]
 [ApiController]
 [Route("api/[controller]")]
 public class MovementRequestsController : ControllerBase
