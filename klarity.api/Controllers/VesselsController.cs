@@ -14,12 +14,9 @@ namespace Klarity.Api.Controllers;
 public class VesselsController : ControllerBase
 {
     private readonly IVesselRepository _vesselRepository;
-    private readonly IAuditService _auditService;
-
-    public VesselsController(IVesselRepository vesselRepository, IAuditService auditService)
+    public VesselsController(IVesselRepository vesselRepository)
     {
         _vesselRepository = vesselRepository;
-        _auditService = auditService;
     }
 
     [HttpGet]
@@ -52,6 +49,7 @@ public class VesselsController : ControllerBase
     }
 
     [HttpPost]
+    [Audit("Create Vessel")]
     public async Task<ActionResult<Vessel>> CreateVessel(Vessel vessel, [FromQuery] string mode = "Marine")
     {
         if (string.IsNullOrEmpty(vessel.VesselId))
@@ -64,11 +62,11 @@ public class VesselsController : ControllerBase
 
         await _vesselRepository.CreateVesselAsync(vessel, mode);
         var created = await _vesselRepository.GetVesselByIdAsync(vessel.VesselId, mode);
-        await _auditService.LogAsync(User.Identity?.Name ?? "system", "Create Vessel", true, "Vessels", System.Text.Json.JsonSerializer.Serialize(created ?? vessel));
         return CreatedAtAction(nameof(GetVessel), new { id = vessel.VesselId, mode = mode }, created ?? vessel);
     }
 
     [HttpPut("{id}")]
+    [Audit("Update Vessel")]
     public async Task<ActionResult<Vessel>> UpdateVessel(string id, Vessel vessel, [FromQuery] string mode = "Marine")
     {
         if (id != vessel.VesselId) return BadRequest("Path ID and Vessel ID mismatch.");
@@ -78,28 +76,14 @@ public class VesselsController : ControllerBase
         // Fetch the fully populated object to return
         var updated = await _vesselRepository.GetVesselByIdAsync(id, mode);
         
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "system", 
-            "Update Vessel", 
-            true, 
-            "Vessels", 
-            System.Text.Json.JsonSerializer.Serialize(updated ?? vessel)
-        );
-        
         return Ok(updated ?? vessel);
     }
 
     [HttpDelete("{id}")]
+    [Audit("Delete Vessel")]
     public async Task<IActionResult> DeleteVessel(string id, [FromBody] DeletionRequest? request, [FromQuery] string mode = "Marine")
     {
         await _vesselRepository.DeleteVesselAsync(id, mode);
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "system", 
-            "Delete Vessel", 
-            true, 
-            "Vessels", 
-            $"ID: {id}, Reason: {request?.Reason ?? "No reason provided"}"
-        );
         return NoContent();
     }
 

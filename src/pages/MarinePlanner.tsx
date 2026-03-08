@@ -54,9 +54,17 @@ export function MarinePlanner() {
       console.log(
         "MarinePlanner: Calling getVessels, getVoyages, getPendingRequests...",
       );
+      const voyagesPromise =
+        startDate && endDate
+          ? getVoyagesByDateRange(
+              startDate.toISOString(),
+              endDate.toISOString(),
+            )
+          : getVoyages();
+
       const results = await Promise.allSettled([
         getVessels(),
-        getVoyages(),
+        voyagesPromise,
         getPendingRequests(),
       ]);
 
@@ -167,7 +175,6 @@ export function MarinePlanner() {
       request.originId !== voyage.originId &&
       request.originName !== voyage.originName
     ) {
-      // Small allowance for comparing ID or Name since Voyage might have labels
     }
 
     if (
@@ -264,7 +271,6 @@ export function MarinePlanner() {
       if (rec.type === "NewVoyage") {
         // 1. Create Voyage
 
-        // Map recommendation to Voyage structure (simplified)
         const newVoyageData = {
           vesselId: rec.vesselId,
           originId: rec.originId,
@@ -278,7 +284,6 @@ export function MarinePlanner() {
         // 2. Assign Items to New Voyage
         await assignItemsToVoyage(newVoyage.voyageId, rec.itemIds);
 
-        // Optimistic Update: Add voyage to vessels
         setVessels((prev) =>
           prev.map((v) =>
             v.vesselId === rec.vesselId
@@ -296,10 +301,8 @@ export function MarinePlanner() {
         toast.success(`Assigned items to voyage ${rec.targetVoyageId}`);
       }
 
-      // Refresh terminal data to update utilization/layouts
       await fetchData();
 
-      // Optimistic Update: Remove from list
       setRecommendationData((prev) => {
         if (!prev) return null;
         return {
@@ -308,7 +311,6 @@ export function MarinePlanner() {
         };
       });
 
-      // Optimistic Update: Remove from pending requests
       setPendingRequests((prev) =>
         prev
           .map((req) => ({
@@ -374,7 +376,6 @@ export function MarinePlanner() {
     try {
       const candidates = await optimizeVoyagePlan();
 
-      // Map candidates to RecommendationSummary
       const recommendations: VoyageRecommendation[] = candidates.map(
         (cand, idx) => ({
           id: cand.voyageId || `rec-${idx}-${Date.now()}`,
@@ -401,14 +402,12 @@ export function MarinePlanner() {
         }),
       );
 
-      // For now, we don't have a backend "urgent unscheduled" list, so we filter from pending
       const urgentUnscheduled = pendingRequests.filter(
         (r) =>
           r.urgencyId === "production-critical" ||
           r.urgencyId === "project-critical",
       );
 
-      // Calculate overall score
       const avgScore =
         recommendations.length > 0
           ? recommendations.reduce((acc, curr) => acc + curr.score, 0) /
@@ -513,6 +512,18 @@ export function MarinePlanner() {
               .map((v) => ({
                 ...v,
                 voyages: v.voyages.filter((voyage) => {
+                  // Filter by date horizon
+                  if (startDate && endDate) {
+                    const voyageDate = dayjs(voyage.departureDateTime);
+                    if (
+                      voyageDate.isBefore(startDate, "day") ||
+                      voyageDate.isAfter(endDate, "day")
+                    ) {
+                      return false;
+                    }
+                  }
+
+                  // Filter by route
                   if (routeFilters.length === 0) return true;
                   return routeFilters.some((filter) => {
                     const matchOrigin =

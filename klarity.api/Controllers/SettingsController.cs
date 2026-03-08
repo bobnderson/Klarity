@@ -1,6 +1,7 @@
 using Klarity.Api.Data;
 using Klarity.Api.Utils;
 using Microsoft.AspNetCore.Mvc;
+using Klarity.Api.Attributes;
 
 namespace Klarity.Api.Controllers
 {
@@ -11,11 +12,19 @@ namespace Klarity.Api.Controllers
     {
         private readonly ISettingsRepository _settingsRepository;
         private readonly Services.IEmailService _emailService;
+        private readonly Services.IAuditService _auditService;
+        private readonly Utils.Security _security;
 
-        public SettingsController(ISettingsRepository settingsRepository, Services.IEmailService emailService)
+        public SettingsController(
+            ISettingsRepository settingsRepository, 
+            Services.IEmailService emailService,
+            Services.IAuditService auditService,
+            Utils.Security security)
         {
             _settingsRepository = settingsRepository;
             _emailService = emailService;
+            _auditService = auditService;
+            _security = security;
         }
 
         [HttpGet("smtp")]
@@ -23,7 +32,6 @@ namespace Klarity.Api.Controllers
         {
             var settings = await _settingsRepository.GetSmtpSettingsAsync();
             
-            // Mask password for security
             if (!string.IsNullOrEmpty(settings.Password))
             {
                 settings.Password = "********";
@@ -33,19 +41,21 @@ namespace Klarity.Api.Controllers
         }
 
         [HttpPost("smtp")]
+        [Audit("Update SMTP Settings")]
         public async Task<IActionResult> SaveSmtpSettings([FromBody] SmtpSettings settings)
         {
-            // If password is masked, retrieve existing password to keep it unchanged
             if (settings.Password == "********")
             {
                 var existing = await _settingsRepository.GetSmtpSettingsAsync();
                 settings.Password = existing.Password;
             }
 
-            var userId = User.Identity?.Name ?? "Unknown";
+            var userId = _security.GetAccountIdFromRequest(Request);
             await _settingsRepository.SaveSmtpSettingsAsync(settings, userId);
+
             return Ok(new { message = "SMTP settings saved successfully" });
         }
+        
         [HttpPost("smtp/test")]
         public async Task<IActionResult> TestSmtpSettings([FromBody] TestSmtpRequest request)
         {

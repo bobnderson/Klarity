@@ -58,6 +58,7 @@ export interface MovementRequestItem {
   itemId: string;
   categoryId: string;
   itemTypeId: string;
+  containerId?: string;
   quantity: number;
   unitOfMeasurement: string;
   description?: string;
@@ -70,6 +71,21 @@ export interface MovementRequestItem {
   status?: "Draft" | "Pending" | "Manifested" | "InTransit" | "Delivered";
   isHazardous?: boolean;
   itemTypeName?: string;
+  validationErrors?: Record<string, boolean>;
+}
+
+export interface FlatCargoItem extends MovementRequestItem {
+  requestId: string;
+  origin: string;
+  destination: string;
+  earliestDeparture: string;
+  latestArrival: string;
+  urgency: string;
+  parentIsHazardous: boolean;
+  businessUnitName: string;
+  requestDate: string;
+  voyageStatus?: string;
+  voyageStatusColor?: string;
 }
 
 export interface MovementRequest {
@@ -103,6 +119,7 @@ export interface MovementRequest {
   transportationRequired?: boolean;
   lifting?: "Normal" | "Complex" | string;
   businessUnitId?: string;
+  businessUnitName?: string;
   costCentre?: string;
   costCentreName?: string;
   comments?: string;
@@ -121,6 +138,8 @@ export interface MovementRequest {
   scheduledArrival?: string;
   returnScheduledDeparture?: string;
   returnScheduledArrival?: string;
+  vesselName?: string;
+  transportationMode?: "Marine" | "Aviation";
 
   // Properties that might be calculated or aggregated
   totalWeight?: number;
@@ -144,4 +163,22 @@ export interface FlightSchedule {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface PredefinedContainer {
+  containerId: string;
+  name: string;
+  vesselId: string;
+  description?: string;
+  length: number;
+  width: number;
+  height: number;
+  dimensionUnit: string;
+  maxWeight: number;
+  weightUnit: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  isDeleted: boolean;
+  isActive: boolean;
 }

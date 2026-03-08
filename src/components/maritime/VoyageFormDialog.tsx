@@ -1,24 +1,21 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
   Button,
-  TextField,
-  MenuItem,
   Grid,
   Box,
-  Chip,
-  Paper,
-  Typography,
-  IconButton,
+  ToggleButton,
+  ToggleButtonGroup,
 } from "@mui/material";
-import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
 import dayjs from "dayjs";
-import { Plus, Trash2, Ship, Plane } from "lucide-react";
+import { VesselSelector } from "./voyage/VesselSelector";
+import { RouteSection } from "./voyage/RouteSection";
+import { ScheduleSection } from "./voyage/ScheduleSection";
+import { StopsSection } from "./voyage/StopsSection";
+import { RecurringSchedulesList } from "./voyage/RecurringSchedulesList";
 import type {
   UnifiedVessel,
   UnifiedVoyage,
@@ -31,6 +28,10 @@ import { getHelicopters } from "../../services/maritime/helicopterService";
 import {
   createVoyage,
   updateVoyage,
+  createVoyageSchedule,
+  getVoyageSchedules,
+  updateVoyageSchedule,
+  deleteVoyageSchedule,
 } from "../../services/maritime/voyageService";
 import {
   createFlight,
@@ -42,9 +43,9 @@ import { toast } from "react-toastify";
 
 interface VoyageFormDialogProps {
   open: boolean;
-  initialData?: UnifiedVoyage | Flight; // Updated type to include Flight
+  initialData?: UnifiedVoyage | Flight;
   onClose: () => void;
-  onSuccess: (newVoyage: UnifiedVoyage | Flight) => void; // Updated type
+  onSuccess: (newVoyage: UnifiedVoyage | Flight) => void;
   isAviation?: boolean;
 }
 
@@ -65,6 +66,18 @@ export function VoyageFormDialog({
   });
   const [stops, setStops] = useState<VoyageStop[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [scheduleData, setScheduleData] = useState({
+    frequency: "Weekly",
+    daysOfWeek: "",
+    dayOfMonth: 1,
+    departureTime: "08:00",
+    durationDays: 1,
+  });
+  const [existingSchedules, setExistingSchedules] = useState<any[]>([]);
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     if (open) {
@@ -133,6 +146,83 @@ export function VoyageFormDialog({
     setStops(newStops);
   };
 
+  const handleDayToggle = (day: string) => {
+    const currentDays = scheduleData.daysOfWeek
+      ? scheduleData.daysOfWeek.split(",")
+      : [];
+    const newDays = currentDays.includes(day)
+      ? currentDays.filter((d) => d !== day)
+      : [...currentDays, day];
+
+    const sortedDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+      .filter((d) => newDays.includes(d))
+      .join(",");
+    setScheduleData((prev) => ({ ...prev, daysOfWeek: sortedDays }));
+  };
+
+  const loadSchedules = async () => {
+    try {
+      const data = await getVoyageSchedules();
+      setExistingSchedules(data);
+    } catch (e) {
+      console.error("Failed to load schedules", e);
+    }
+  };
+
+  useEffect(() => {
+    if (open && isRecurring) {
+      loadSchedules();
+    }
+  }, [open, isRecurring]);
+
+  const handleEditSchedule = (schedule: any) => {
+    setEditingScheduleId(schedule.scheduleId);
+    setFormData({
+      vesselId: schedule.vesselId,
+      origin: schedule.originId,
+      destination: schedule.destinationId,
+      departureDateTime: dayjs(),
+      eta: dayjs(),
+    });
+    setScheduleData({
+      frequency: schedule.frequency,
+      daysOfWeek: schedule.daysOfWeek || "",
+      dayOfMonth: schedule.dayOfMonth || 1,
+      departureTime: schedule.departureTime.substring(0, 5),
+      durationDays: schedule.durationDays,
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingScheduleId(null);
+    setFormData({
+      vesselId: "",
+      origin: "",
+      destination: "",
+      departureDateTime: dayjs().add(1, "day").startOf("hour"),
+      eta: dayjs().add(2, "day").startOf("hour"),
+    });
+    setScheduleData({
+      frequency: "Weekly",
+      daysOfWeek: "",
+      dayOfMonth: 1,
+      departureTime: "08:00",
+      durationDays: 1,
+    });
+  };
+
+  const handleDeleteSchedule = async (id: string) => {
+    if (window.confirm("Are you sure you want to delete this schedule?")) {
+      try {
+        await deleteVoyageSchedule(id);
+        toast.success("Schedule deleted");
+        loadSchedules();
+      } catch (e) {
+        toast.error("Failed to delete schedule");
+      }
+    }
+  };
+
   const handleSubmit = async () => {
     if (!formData.vesselId || !formData.origin || !formData.destination) {
       toast.error("Please fill in all required fields");
@@ -162,6 +252,33 @@ export function VoyageFormDialog({
       (selectedVessel as any)?.helicopterName;
 
     try {
+      if (isRecurring && !isAviation) {
+        const payload = {
+          scheduleId: editingScheduleId || undefined,
+          vesselId: formData.vesselId,
+          originId: formData.origin,
+          destinationId: formData.destination,
+          departureTime: scheduleData.departureTime + ":00",
+          durationDays: scheduleData.durationDays,
+          frequency: scheduleData.frequency,
+          daysOfWeek: scheduleData.daysOfWeek,
+          dayOfMonth: scheduleData.dayOfMonth,
+          isActive: true,
+        };
+
+        if (editingScheduleId) {
+          await updateVoyageSchedule(payload as any);
+          toast.success("Schedule updated successfully");
+        } else {
+          await createVoyageSchedule(payload as any);
+          toast.success("Recurring schedule created successfully");
+        }
+
+        handleCancelEdit();
+        loadSchedules();
+        return;
+      }
+
       if (initialData) {
         if (isAviation) {
           const updated = await updateFlight({
@@ -226,28 +343,6 @@ export function VoyageFormDialog({
     }
   };
 
-  const inputSx = {
-    "& .MuiInputBase-root": { fontSize: "0.875rem" },
-    "& .MuiInputLabel-root": { fontSize: "0.875rem" },
-  };
-
-  const menuItemSx = {
-    fontSize: "0.875rem",
-  };
-
-  const getStatusStyle = (status: string | undefined) => {
-    switch (status) {
-      case "Active":
-        return { bgcolor: "rgba(34, 197, 94, 0.2)", color: "#4ade80" }; // Green
-      case "Maintenance":
-        return { bgcolor: "rgba(245, 158, 11, 0.2)", color: "#fbbf24" }; // Amber
-      case "Inactive":
-        return { bgcolor: "rgba(239, 68, 68, 0.2)", color: "#f87171" }; // Red
-      default:
-        return { bgcolor: "rgba(148, 163, 184, 0.2)", color: "#94a3b8" }; // Grey
-    }
-  };
-
   const selectedVesselObj = vessels.find(
     (v) =>
       ((v as any).vesselId || (v as any).helicopterId) === formData.vesselId,
@@ -265,388 +360,98 @@ export function VoyageFormDialog({
             : "Create New Voyage"}
       </DialogTitle>
       <DialogContent dividers>
+        {!initialData && !isAviation && (
+          <Box sx={{ mb: 3, display: "flex", justifyContent: "center" }}>
+            <ToggleButtonGroup
+              value={isRecurring ? "recurring" : "oneoff"}
+              exclusive
+              onChange={(_, val) => val && setIsRecurring(val === "recurring")}
+              size="small"
+              color="primary"
+            >
+              <ToggleButton value="oneoff" sx={{ px: 3 }}>
+                One-off Voyage
+              </ToggleButton>
+              <ToggleButton value="recurring" sx={{ px: 3 }}>
+                Recurring Schedule
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        )}
+
         <Grid container spacing={3} sx={{ mt: 0.5 }}>
-          <Grid size={{ xs: 12 }}>
-            <TextField
-              select
-              fullWidth
-              label={isAviation ? "Helicopter" : "Vessel"}
-              value={formData.vesselId}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setFormData({ ...formData, vesselId: e.target.value })
-              }
-              size="small"
-              sx={inputSx}
-            >
-              {vessels.map((v: any, vIdx: number) => {
-                const vid = v.vesselId || v.helicopterId;
-                const vname = v.vesselName || v.helicopterName;
-                return (
-                  <MenuItem key={vid || vIdx} value={vid} sx={menuItemSx}>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        width: "100%",
-                      }}
-                    >
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
-                      >
-                        {isAviation ? <Plane size={14} /> : <Ship size={14} />}
-                        <span>{vname}</span>
-                      </Box>
-                      {v.statusId && (
-                        <Chip
-                          label={v.statusId}
-                          size="small"
-                          sx={{
-                            height: 16,
-                            fontSize: 9,
-                            fontWeight: 600,
-                            textTransform: "uppercase",
-                            borderRadius: "4px",
-                            ...getStatusStyle(v.statusId),
-                          }}
-                        />
-                      )}
-                    </Box>
-                  </MenuItem>
-                );
-              })}
-            </TextField>
-          </Grid>
+          <VesselSelector
+            isAviation={isAviation}
+            vesselId={formData.vesselId}
+            vessels={vessels}
+            onVesselChange={(vId) =>
+              setFormData({ ...formData, vesselId: vId })
+            }
+            selectedVesselObj={selectedVesselObj}
+          />
 
-          {selectedVesselObj && (
-            <Grid size={{ xs: 12 }}>
-              <Paper
-                variant="outlined"
-                sx={{
-                  p: 2,
-                  bgcolor: "rgba(0,0,0,0.02)",
-                  borderStyle: "dashed",
-                  borderRadius: "8px",
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  sx={{
-                    fontWeight: 700,
-                    color: "var(--muted)",
-                    display: "block",
-                    mb: 1.5,
-                    letterSpacing: "0.05em",
-                    fontSize: "0.7rem",
-                  }}
-                >
-                  {isAviation
-                    ? "AIRCRAFT SPECIFICATIONS"
-                    : "VESSEL SPECIFICATIONS"}
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 4 }}>
-                    <Typography
-                      variant="caption"
-                      color="var(--muted)"
-                      display="block"
-                      sx={{ fontSize: "0.7rem", fontWeight: 600 }}
-                    >
-                      CAPACITY
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontSize: "0.875rem", mt: 0.5 }}
-                    >
-                      {(
-                        (selectedVesselObj as any).capacities?.deadWeight ||
-                        (selectedVesselObj as any).capacities?.maxPayload
-                      )?.toLocaleString() || "-"}{" "}
-                      t
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      color="var(--muted)"
-                      sx={{ fontSize: "0.75rem" }}
-                    >
-                      {(
-                        (selectedVesselObj as any).capacities?.deckArea ||
-                        (selectedVesselObj as any).capacities?.cabinPayload
-                      )?.toLocaleString() || "-"}{" "}
-                      {isAviation ? "kg Cabin" : "m² Deck"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 4 }}>
-                    <Typography
-                      variant="caption"
-                      color="var(--muted)"
-                      display="block"
-                      sx={{ fontSize: "0.7rem", fontWeight: 600 }}
-                    >
-                      COMPLEMENT / SEATS
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontSize: "0.875rem", mt: 0.5 }}
-                    >
-                      {(selectedVesselObj as any).capacities?.totalComplement ||
-                        (selectedVesselObj as any).passengerSeats ||
-                        "-"}{" "}
-                      {isAviation ? "Seats" : "Persons"}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 4 }}>
-                    <Typography
-                      variant="caption"
-                      color="var(--muted)"
-                      display="block"
-                      sx={{ fontSize: "0.7rem", fontWeight: 600 }}
-                    >
-                      PERFORMANCE
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      sx={{ fontSize: "0.875rem", mt: 0.5 }}
-                    >
-                      {(selectedVesselObj as any).performance?.serviceSpeed ||
-                        (selectedVesselObj as any).performance?.cruiseSpeed ||
-                        "-"}{" "}
-                      kts
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      color="var(--muted)"
-                      sx={{ fontSize: "0.75rem" }}
-                    >
-                      {isAviation ? "Cruise Speed" : "Service Speed"}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Paper>
-            </Grid>
+          <RouteSection
+            origin={formData.origin}
+            destination={formData.destination}
+            locations={locations}
+            onOriginChange={(val) => setFormData({ ...formData, origin: val })}
+            onDestinationChange={(val) =>
+              setFormData({ ...formData, destination: val })
+            }
+          />
+
+          <ScheduleSection
+            isRecurring={isRecurring}
+            isAviation={isAviation}
+            departureDateTime={formData.departureDateTime}
+            eta={formData.eta}
+            scheduleData={scheduleData}
+            onDepartureChange={(val) =>
+              setFormData({ ...formData, departureDateTime: val })
+            }
+            onEtaChange={(val) => setFormData({ ...formData, eta: val })}
+            onScheduleDataChange={setScheduleData}
+            onDayToggle={handleDayToggle}
+          />
+
+          <StopsSection
+            stops={stops}
+            locations={locations}
+            onAddStop={handleAddStop}
+            onRemoveStop={handleRemoveStop}
+            onStopChange={handleStopChange}
+          />
+
+          {isRecurring && (
+            <RecurringSchedulesList
+              existingSchedules={existingSchedules}
+              editingScheduleId={editingScheduleId}
+              onEditSchedule={handleEditSchedule}
+              onDeleteSchedule={handleDeleteSchedule}
+            />
           )}
-
-          <Grid size={{ xs: 6 }}>
-            <TextField
-              select
-              fullWidth
-              label="Origin"
-              value={formData.origin}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setFormData({ ...formData, origin: e.target.value })
-              }
-              size="small"
-              sx={inputSx}
-            >
-              {locations.map((loc) => (
-                <MenuItem
-                  key={loc.locationId}
-                  value={loc.locationId}
-                  sx={menuItemSx}
-                >
-                  {loc.locationName}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-
-          <Grid size={{ xs: 6 }}>
-            <TextField
-              select
-              fullWidth
-              label="Destination"
-              value={formData.destination}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setFormData({ ...formData, destination: e.target.value })
-              }
-              size="small"
-              sx={inputSx}
-            >
-              {locations.map((loc) => (
-                <MenuItem
-                  key={loc.locationId}
-                  value={loc.locationId}
-                  sx={menuItemSx}
-                >
-                  {loc.locationName}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-
-          <LocalizationProvider dateAdapter={AdapterDayjs}>
-            <Grid size={{ xs: 6 }}>
-              <DateTimePicker
-                label="Departure Date & Time"
-                value={formData.departureDateTime}
-                onChange={(newValue) =>
-                  setFormData({
-                    ...formData,
-                    departureDateTime: newValue || dayjs(),
-                  })
-                }
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    size: "small",
-                    sx: inputSx,
-                  },
-                }}
-              />
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <DateTimePicker
-                label={isAviation ? "Arrival Time" : "ETA"}
-                value={formData.eta}
-                onChange={(newValue) =>
-                  setFormData({ ...formData, eta: newValue || dayjs() })
-                }
-                slotProps={{
-                  textField: {
-                    fullWidth: true,
-                    size: "small",
-                    sx: inputSx,
-                  },
-                }}
-              />
-            </Grid>
-          </LocalizationProvider>
-
-          {/* Intermediate Stops Section */}
-          <Grid size={{ xs: 12 }}>
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                mb: 1,
-              }}
-            >
-              <Typography variant="subtitle2">Intermediate Stops</Typography>
-              <Button
-                startIcon={<Plus size={16} />}
-                size="small"
-                onClick={handleAddStop}
-              >
-                Add Stop
-              </Button>
-            </Box>
-            {stops.map((stop, index) => (
-              <Paper
-                key={stop.stopId}
-                variant="outlined"
-                sx={{ p: 2, mb: 1, bgcolor: "var(--bg-subtle)" }}
-              >
-                <Grid container spacing={2} alignItems="center">
-                  <Grid size={{ xs: 11 }}>
-                    <Grid container spacing={2}>
-                      <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField
-                          select
-                          fullWidth
-                          label={`Stop #${index + 1}`}
-                          value={stop.locationId}
-                          onChange={(e) =>
-                            handleStopChange(
-                              index,
-                              "locationId",
-                              e.target.value,
-                            )
-                          }
-                          size="small"
-                          sx={inputSx}
-                        >
-                          {locations.map((loc) => (
-                            <MenuItem
-                              key={loc.locationId}
-                              value={loc.locationId}
-                              sx={menuItemSx}
-                            >
-                              {loc.locationName}
-                            </MenuItem>
-                          ))}
-                        </TextField>
-                      </Grid>
-                      <LocalizationProvider dateAdapter={AdapterDayjs}>
-                        <Grid size={{ xs: 6, md: 4 }}>
-                          <DateTimePicker
-                            label="Arrival"
-                            value={dayjs(stop.arrivalDateTime)}
-                            onChange={(newValue) =>
-                              handleStopChange(
-                                index,
-                                "arrivalDateTime",
-                                newValue?.toISOString(),
-                              )
-                            }
-                            slotProps={{
-                              textField: {
-                                fullWidth: true,
-                                size: "small",
-                                sx: inputSx,
-                              },
-                            }}
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 6, md: 4 }}>
-                          <DateTimePicker
-                            label="Departure"
-                            value={dayjs(stop.departureDateTime)}
-                            onChange={(newValue) =>
-                              handleStopChange(
-                                index,
-                                "departureDateTime",
-                                newValue?.toISOString(),
-                              )
-                            }
-                            slotProps={{
-                              textField: {
-                                fullWidth: true,
-                                size: "small",
-                                sx: inputSx,
-                              },
-                            }}
-                          />
-                        </Grid>
-                      </LocalizationProvider>
-                    </Grid>
-                  </Grid>
-                  <Grid size={{ xs: 1 }}>
-                    <IconButton
-                      size="small"
-                      color="error"
-                      onClick={() => handleRemoveStop(index)}
-                    >
-                      <Trash2 size={16} />
-                    </IconButton>
-                  </Grid>
-                </Grid>
-              </Paper>
-            ))}
-            {stops.length === 0 && (
-              <Typography
-                variant="body2"
-                color="textSecondary"
-                sx={{ fontStyle: "italic", textAlign: "center", py: 1 }}
-              >
-                No intermediate stops added.
-              </Typography>
-            )}
-          </Grid>
         </Grid>
       </DialogContent>
       <DialogActions sx={{ p: 2, gap: 1 }}>
-        <Button onClick={onClose} variant="outlined" color="inherit">
-          Cancel
+        <Button
+          onClick={editingScheduleId ? handleCancelEdit : onClose}
+          variant="outlined"
+          color="inherit"
+        >
+          {editingScheduleId ? "Cancel Edit" : "Cancel"}
         </Button>
         <Button onClick={handleSubmit} variant="contained" color="primary">
-          {initialData
-            ? isAviation
-              ? "Update Flight"
-              : "Update Voyage"
-            : isAviation
-              ? "Create Flight"
-              : "Create Voyage"}
+          {isRecurring
+            ? editingScheduleId
+              ? "Update Schedule"
+              : "Create Schedule"
+            : initialData
+              ? isAviation
+                ? "Update Flight"
+                : "Update Voyage"
+              : isAviation
+                ? "Create Flight"
+                : "Create Voyage"}
         </Button>
       </DialogActions>
     </Dialog>

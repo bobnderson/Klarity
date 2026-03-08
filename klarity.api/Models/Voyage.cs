@@ -12,8 +12,7 @@ public class Voyage
     public string? OriginName { get; set; }
     public string DestinationId { get; set; } = string.Empty;
     public string? DestinationName { get; set; }
-
-    // Compatibility properties for stale references
+    public string? ScheduleId { get; set; }
     public string? Origin => OriginName;
     public string? Destination => DestinationName;
 

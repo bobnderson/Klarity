@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Manifest {{Identifier}}</title>
+    <style>
+      @page {
+        size: A4 landscape;
+      }
+      body {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        color: #333;
+        font-size: 12px;
+        margin: 0;
+        padding: 20px;
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .header h1 {
+        font-size: 24px;
+        margin: 0 0 10px 0;
+        color: #2c3e50;
+      }
+      .info-box {
+        border-top: 2px solid #ecf0f1;
+        border-bottom: 2px solid #ecf0f1;
+        padding: 15px 0;
+        margin-bottom: 20px;
+        display: table;
+        width: 100%;
+      }
+      .info-col {
+        display: table-cell;
+        width: 33%;
+        vertical-align: top;
+      }
+      .info-col h3 {
+        font-size: 12px;
+        color: #7f8c8d;
+        margin: 0 0 5px 0;
+        text-transform: uppercase;
+      }
+      .info-col p {
+        margin: 0 0 10px 0;
+        font-size: 13px;
+        font-weight: bold;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+      th,
+      td {
+        padding: 8px 10px;
+        text-align: left;
+        border-bottom: 1px solid #ecf0f1;
+      }
+      th {
+        background-color: #2980b9;
+        color: white;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+      tr:nth-child(even) {
+        background-color: #f9f9f9;
+      }
+      .footer {
+        margin-top: 30px;
+        text-align: center;
+        font-size: 10px;
+        color: #95a5a6;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <h1>{{HeaderType}} MANIFEST</h1>
+      <p style="margin: 0; color: #7f8c8d">
+        Identifier: <strong>{{Identifier}}</strong> | Generated: {{DateTime}}
+      </p>
+    </div>
+
+    <div class="info-box">
+      <div class="info-col">
+        <h3>{{VesselLabel}} DETAILS</h3>
+        <p>Name: {{VesselName}}</p>
+        <h3 style="margin-top: 10px">CLIENT</h3>
+        <p>{{ClientName}}</p>
+      </div>
+      <div class="info-col">
+        <h3>ROUTE & TIMING</h3>
+        <p>{{Route}}</p>
+        <p style="font-weight: normal; font-size: 11px">
+          Dep: {{Departure}}<br />Arr: {{Arrival}}
+        </p>
+      </div>
+      <div class="info-col">
+        <h3>UTILIZATION</h3>
+        <p>{{UtilLabel1}} {{WeightUtil}}%<br />{{UtilLabel2}} {{DeckUtil}}%</p>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>REQ ID</th>
+          <th>BUSINESS UNIT</th>
+          <th>CONS. TYPE</th>
+          <th>ITEM TYPE</th>
+          <th>DESC</th>
+          <th>HAZ</th>
+          <th>QTY</th>
+          <th>DIMENSIONS</th>
+          <th>WEIGHT</th>
+          <th>URGENCY</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{Rows}}
+      </tbody>
+    </table>
+
+    <div class="footer">
+      End of Manifest for {{Identifier}}.<br />
+      This document is computer generated and if not altered doesn't require
+      signature.
+    </div>
+  </body>
+</html>

@@ -1,29 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  Box,
-  Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Button,
-  TableSortLabel,
-  Chip,
-} from "@mui/material";
-import {
-  Download,
-  Package,
-  AlertTriangle,
-  Layers,
-  FileText,
-  MapPin,
-  Maximize,
-  Briefcase,
-} from "lucide-react";
-import { LinearProgress } from "@mui/material";
+import { Box, LinearProgress } from "@mui/material";
 import dayjs, { Dayjs } from "dayjs";
 import { MarineHeader } from "../components/maritime/MarineHeader";
 import { getVessels } from "../services/maritime/vesselService";
@@ -31,26 +7,13 @@ import { getAllRequests } from "../services/maritime/marineMovementService";
 import type { Vessel } from "../types/maritime/marine";
 import type {
   MovementRequest,
-  MovementRequestItem,
   BusinessUnitOption,
+  FlatCargoItem,
 } from "../types/maritime/logistics";
 import { getBusinessUnits } from "../services/maritime/referenceDataService";
 import { toast } from "react-toastify";
-import { formatNumber } from "../utils/formatters";
-
-interface FlatCargoItem extends MovementRequestItem {
-  requestId: string;
-  origin: string;
-  destination: string;
-  earliestDeparture: string;
-  latestArrival: string;
-  urgency: string;
-  parentIsHazardous: boolean;
-  businessUnitName: string;
-  requestDate: string;
-  voyageStatus?: string;
-  voyageStatusColor?: string;
-}
+import { CargoManifestStats } from "../components/manifests/CargoManifestStats";
+import { CargoManifestTable } from "../components/manifests/CargoManifestTable";
 
 export function CargoManifestPage() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
@@ -203,17 +166,13 @@ export function CargoManifestPage() {
     let aValue = a[orderBy];
     let bValue = b[orderBy];
 
-    // Handle null/undefined
     if (aValue === null || aValue === undefined) aValue = "";
     if (bValue === null || bValue === undefined) bValue = "";
 
-    // Specific handling for dates if needed, but string comparison works for ISO dates
-    // For numeric values
     if (typeof aValue === "number" && typeof bValue === "number") {
       return order === "asc" ? aValue - bValue : bValue - aValue;
     }
 
-    // String comparison
     return order === "asc"
       ? String(aValue).localeCompare(String(bValue))
       : String(bValue).localeCompare(String(aValue));
@@ -295,7 +254,6 @@ export function CargoManifestPage() {
         setSelectedVesselIds={setSelectedVesselIds}
         routeFilters={routeFilters}
         setRouteFilters={setRouteFilters}
-        // These are required by MarineHeader props but not strictly used here
         onOptimize={() => {}}
         onCompareScenarios={() => {}}
         title="Material Request Dashboard"
@@ -304,430 +262,20 @@ export function CargoManifestPage() {
 
       {isLoading && <LinearProgress sx={{ height: 2 }} />}
 
-      {/* KPI Dashboard */}
-      <Box
-        sx={{
-          px: 3,
-          pt: 3,
-          pb: 1,
-          display: "grid",
-          gridTemplateColumns: "repeat(5, 1fr)",
-          gap: 2,
-        }}
-      >
-        {[
-          {
-            label: "Total Items",
-            value: formatNumber(sortedItems.length),
-            icon: <Layers size={20} />,
-            color: "var(--primary)",
-            bg: "rgba(14, 165, 233, 0.1)",
-          },
-          {
-            label: "Top Route",
-            value: (() => {
-              const routes = sortedItems.map(
-                (i) => `${i.origin} → ${i.destination}`,
-              );
-              if (routes.length === 0) return "-";
-              const counts = routes.reduce(
-                (acc, route) => {
-                  acc[route] = (acc[route] || 0) + 1;
-                  return acc;
-                },
-                {} as Record<string, number>,
-              );
-              return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
-            })(),
-            icon: <MapPin size={20} />,
-            color: "#f59e0b",
-            bg: "rgba(245, 158, 11, 0.1)",
-          },
-          {
-            label: "Deckspace Util.",
-            value: (() => {
-              // Calculate total required deck area from unique requests involved
-              const uniqueRequestIds = new Set(
-                sortedItems.map((i) => i.requestId),
-              );
-              const involvedRequests = requests.filter((r) =>
-                uniqueRequestIds.has(r.requestId),
-              );
-              const totalRequiredArea = involvedRequests.reduce(
-                (sum, req) => sum + (req.totalDeckArea || 0),
-                0,
-              );
+      <CargoManifestStats
+        sortedItems={sortedItems}
+        requests={requests}
+        vessels={vessels}
+        businessUnits={businessUnits}
+      />
 
-              // Calculate total available deck area from all vessels (or could filter by selected)
-              // Using all vessels for context of "fleet utilization"
-              const totalVesselCapacity = vessels.reduce(
-                (sum, v) => sum + (v.capacities?.deckArea || 0),
-                0,
-              );
-
-              if (totalVesselCapacity === 0) return "0%";
-
-              const util = (totalRequiredArea / totalVesselCapacity) * 100;
-              return `${formatNumber(util)}%`;
-            })(),
-            icon: <Maximize size={20} />,
-            color: "#8b5cf6",
-            bg: "rgba(139, 92, 246, 0.1)",
-          },
-          {
-            label: "Top Business Unit",
-            value: (() => {
-              const uniqueRequestIds = new Set(
-                sortedItems.map((i) => i.requestId),
-              );
-              const involvedRequests = requests.filter((r) =>
-                uniqueRequestIds.has(r.requestId),
-              );
-
-              const buCounts = involvedRequests.reduce(
-                (acc, req) => {
-                  if (req.businessUnitId) {
-                    acc[req.businessUnitId] =
-                      (acc[req.businessUnitId] || 0) + 1;
-                  }
-                  return acc;
-                },
-                {} as Record<string, number>,
-              );
-
-              const sorted = Object.entries(buCounts).sort(
-                (a, b) => b[1] - a[1],
-              );
-              if (sorted.length === 0) return "-";
-
-              const topBuId = sorted[0][0];
-              const bu = businessUnits.find(
-                (b) => b.businessUnitId === topBuId,
-              );
-              return bu ? bu.businessUnit : "Unknown";
-            })(),
-            icon: <Briefcase size={20} />,
-            color: "#ec4899", // Pink
-            bg: "rgba(236, 72, 153, 0.1)",
-          },
-          {
-            label: "Total Requests",
-            value: formatNumber(
-              new Set(sortedItems.map((i) => i.requestId)).size,
-            ),
-            icon: <FileText size={20} />,
-            color: "#10b981", // Emerald
-            bg: "rgba(16, 185, 129, 0.1)",
-          },
-        ].map((kpi, index) => (
-          <Paper
-            key={index}
-            sx={{
-              p: 2,
-              borderRadius: "12px",
-              bgcolor: "var(--panel)",
-              border: "1px solid var(--border)",
-              display: "flex",
-              alignItems: "center",
-              gap: 2,
-            }}
-          >
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: "8px",
-                bgcolor: kpi.bg,
-                color: kpi.color,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              {kpi.icon}
-            </Box>
-            <Box>
-              <Typography
-                variant="body2"
-                sx={{ color: "var(--text-secondary)", mb: 0.5 }}
-              >
-                {kpi.label}
-              </Typography>
-              <Typography
-                variant={
-                  kpi.label === "Top Route" || kpi.label === "Top Business Unit"
-                    ? "body1"
-                    : "h5"
-                }
-                sx={{ fontWeight: 700, color: "var(--text)" }}
-              >
-                {kpi.value}
-              </Typography>
-            </Box>
-          </Paper>
-        ))}
-      </Box>
-
-      <Box
-        sx={{
-          p: 3,
-          flex: 1,
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <Box
-          sx={{
-            display: "flex",
-            justifyContent: "flex-end",
-            alignItems: "center",
-            mb: 3,
-          }}
-        >
-          <Button
-            variant="contained"
-            startIcon={<Download size={18} />}
-            onClick={exportToCSV}
-            className="btn-primary-gradient"
-            sx={{ borderRadius: "8px", px: 3 }}
-          >
-            Export CSV
-          </Button>
-        </Box>
-
-        <TableContainer
-          component={Paper}
-          sx={{
-            flex: 1,
-            bgcolor: "var(--panel)",
-            border: "1px solid var(--border)",
-            borderRadius: "12px",
-            boxShadow: "none",
-            overflow: "auto",
-          }}
-        >
-          <Table stickyHeader sx={{ minWidth: 1000 }}>
-            <TableHead>
-              <TableRow>
-                {[
-                  { id: "requestId", label: "Request" },
-                  { id: "requestDate", label: "Date" },
-                  { id: "businessUnitName", label: "Business Unit" },
-                  { id: "itemTypeName", label: "Item Name" }, // Sorting by itemTypeName for Description
-                  { id: "quantity", label: "Qty" },
-                  { id: "weight", label: "Weight (t)" },
-                  { id: "origin", label: "Origin" },
-                  { id: "destination", label: "Destination" },
-                  { id: "earliestDeparture", label: "Departure" },
-                  { id: "parentIsHazardous", label: "Hazardous" },
-                  { id: "urgency", label: "Urgency" },
-                  { id: "voyageStatus", label: "Delivery Status" },
-                ].map((headCell) => (
-                  <TableCell
-                    key={headCell.id}
-                    sortDirection={orderBy === headCell.id ? order : false}
-                    sx={{
-                      bgcolor: "var(--panel)",
-                      fontWeight: 600,
-                      borderBottom: "1px solid var(--border)",
-                      color: "var(--text)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <TableSortLabel
-                      active={orderBy === headCell.id}
-                      direction={orderBy === headCell.id ? order : "asc"}
-                      onClick={() =>
-                        handleRequestSort(headCell.id as keyof FlatCargoItem)
-                      }
-                      sx={{
-                        "&.MuiTableSortLabel-root": {
-                          color: "var(--text)",
-                        },
-                        "&.MuiTableSortLabel-root:hover": {
-                          color: "var(--text)",
-                        },
-                        "&.Mui-active": {
-                          color: "var(--text)",
-                        },
-                        "& .MuiTableSortLabel-icon": {
-                          color: "var(--text-secondary) !important",
-                        },
-                      }}
-                    >
-                      {headCell.label}
-                    </TableSortLabel>
-                  </TableCell>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {sortedItems.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={12}
-                    sx={{ py: 10, textAlign: "center", borderBottom: "none" }}
-                  >
-                    <Box
-                      sx={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: 2,
-                        color: "var(--muted)",
-                      }}
-                    >
-                      <Package size={48} opacity={0.3} />
-                      <Typography>
-                        No cargo items found matching the current filters.
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                sortedItems.map((item, idx) => (
-                  <TableRow
-                    key={`${item.requestId}-${item.itemId}-${idx}`}
-                    sx={{ "&:hover": { bgcolor: "rgba(255,255,255,0.02)" } }}
-                  >
-                    <TableCell
-                      sx={{
-                        borderBottom: "1px solid var(--border)",
-                        fontWeight: 600,
-                        color: "var(--text)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {item.requestId}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        borderBottom: "1px solid var(--border)",
-                        color: "var(--text)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {item.requestDate
-                        ? dayjs(item.requestDate).format("DD MMM YYYY")
-                        : "-"}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        borderBottom: "1px solid var(--border)",
-                        color: "var(--text)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {item.businessUnitName}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        borderBottom: "1px solid var(--border)",
-                        color: "var(--text)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {item.itemTypeName || item.description || "-"}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        borderBottom: "1px solid var(--border)",
-                        color: "var(--text)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {formatNumber(item.quantity)} {item.unitOfMeasurement}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        borderBottom: "1px solid var(--border)",
-                        color: "var(--text)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {formatNumber(item.weight)}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        borderBottom: "1px solid var(--border)",
-                        color: "var(--text)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {item.origin}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        borderBottom: "1px solid var(--border)",
-                        color: "var(--text)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {item.destination}
-                    </TableCell>
-                    <TableCell
-                      sx={{
-                        borderBottom: "1px solid var(--border)",
-                        color: "var(--text-secondary)",
-                        fontSize: "0.85rem",
-                      }}
-                    >
-                      {dayjs(item.earliestDeparture).format("DD MMM HH:mm")}
-                    </TableCell>
-                    <TableCell sx={{ borderBottom: "1px solid var(--border)" }}>
-                      {(item.isHazardous || item.parentIsHazardous) && (
-                        <Box sx={{ display: "flex", justifyContent: "center" }}>
-                          <AlertTriangle size={18} color="#f43f5e" />
-                        </Box>
-                      )}
-                    </TableCell>
-                    <TableCell sx={{ borderBottom: "1px solid var(--border)" }}>
-                      <Chip
-                        label={item.urgency}
-                        size="small"
-                        sx={{
-                          bgcolor: "rgba(56, 189, 248, 0.1)",
-                          color: "var(--accent)",
-                          fontWeight: 600,
-                          fontSize: "0.7rem",
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell sx={{ borderBottom: "1px solid var(--border)" }}>
-                      {item.voyageStatus !== "-" && (
-                        <Chip
-                          label={item.voyageStatus}
-                          size="small"
-                          sx={{
-                            bgcolor:
-                              item.voyageStatus === "In Transit"
-                                ? "rgba(56, 189, 248, 0.1)"
-                                : "rgba(100, 116, 139, 0.1)",
-                            color:
-                              item.voyageStatus === "In Transit"
-                                ? "var(--accent)"
-                                : "var(--text-secondary)",
-                            fontWeight: 600,
-                            fontSize: "0.7rem",
-                          }}
-                        />
-                      )}
-                      {item.voyageStatus === "-" && (
-                        <span
-                          style={{ color: "var(--muted)", fontSize: "0.85rem" }}
-                        >
-                          -
-                        </span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Box>
+      <CargoManifestTable
+        sortedItems={sortedItems}
+        orderBy={orderBy}
+        order={order}
+        handleRequestSort={handleRequestSort}
+        exportToCSV={exportToCSV}
+      />
     </Box>
   );
 }

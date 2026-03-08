@@ -20,7 +20,7 @@ public class FlightsController : ControllerBase
     private readonly IMovementRequestRepository _requestRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IVoyageOptimizerService _optimizerService;
-    private readonly IAuditService _auditService;
+    private readonly IManifestExportService _manifestExportService;
 
     public FlightsController(
         IFlightRepository repository,
@@ -28,14 +28,14 @@ public class FlightsController : ControllerBase
         IMovementRequestRepository requestRepository,
         ILocationRepository locationRepository,
         IVoyageOptimizerService optimizerService,
-        IAuditService auditService)
+        IManifestExportService manifestExportService)
     {
         _repository = repository;
         _vesselRepository = vesselRepository;
         _requestRepository = requestRepository;
         _locationRepository = locationRepository;
         _optimizerService = optimizerService;
-        _auditService = auditService;
+        _manifestExportService = manifestExportService;
     }
 
     [HttpGet]
@@ -78,6 +78,7 @@ public class FlightsController : ControllerBase
 
     [HttpPost]
     [ValidateModel]
+    [Audit("Create Flight")]
     public async Task<ActionResult<Flight>> CreateFlight(Flight flight)
     {
         if (string.IsNullOrEmpty(flight.FlightId))
@@ -86,50 +87,25 @@ public class FlightsController : ControllerBase
         }
 
         await _repository.CreateFlightAsync(flight);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Create Flight",
-            true,
-            "Flights",
-            System.Text.Json.JsonSerializer.Serialize(flight)
-        );
-
         return CreatedAtAction(nameof(GetFlight), new { id = flight.FlightId }, flight);
     }
 
     [HttpPut("{id}")]
     [ValidateModel]
+    [Audit("Update Flight")]
     public async Task<IActionResult> UpdateFlight(string id, Flight flight)
     {
         if (id != flight.FlightId) return BadRequest("ID mismatch");
 
         await _repository.UpdateFlightAsync(flight);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Update Flight",
-            true,
-            "Flights",
-            System.Text.Json.JsonSerializer.Serialize(flight)
-        );
-
         return Ok(flight);
     }
 
     [HttpDelete("{id}")]
+    [Audit("Delete Flight")]
     public async Task<IActionResult> DeleteFlight(string id)
     {
         await _repository.DeleteFlightAsync(id);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Delete Flight",
-            true,
-            "Flights",
-            $"Flight deleted: {id}"
-        );
-
         return NoContent();
     }
 
@@ -140,51 +116,64 @@ public class FlightsController : ControllerBase
         return Ok(manifest);
     }
 
+    [HttpGet("{id}/manifest/download")]
+    public async Task<IActionResult> DownloadManifest(string id)
+    {
+        try
+        {
+            var flight = await _repository.GetFlightByIdAsync(id);
+            if (flight == null) return NotFound("Flight not found");
+
+            var vessel = await _vesselRepository.GetVesselByIdAsync(flight.HelicopterId);
+            var manifest = await _repository.GetFlightManifestAsync(id);
+
+            var pdfBytes = _manifestExportService.GenerateManifestPdf(new ManifestExportData
+            {
+                Identifier = flight.FlightId,
+                VesselName = vessel?.VesselName ?? flight.HelicopterId,
+                Route = $"{flight.OriginName ?? flight.OriginId} to {flight.DestinationName ?? flight.DestinationId}",
+                Departure = flight.DepartureDateTime.ToString("dd MMM yyyy HH:mm"),
+                Arrival = flight.ArrivalDateTime.ToString("dd MMM yyyy HH:mm"),
+                WeightUtil = flight.PayloadUtil,
+                DeckUtil = flight.CabinUtil,
+                Manifest = manifest,
+                IsAviation = true,
+                Status = flight.StatusId ?? "scheduled"
+            });
+
+            return File(pdfBytes, "application/pdf", $"Manifest_{vessel?.VesselName ?? "Aircraft"}_{id}.pdf");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Error generating PDF: {ex.Message}");
+        }
+    }
+
     [HttpPost("{id}/assign-items")]
+    [Audit("Assign Items to Flight")]
     public async Task<IActionResult> AssignItems(string id, [FromBody] FlightAssignmentRequest request)
     {
         await _repository.AssignItemsToFlightAsync(id, request.ItemIds);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Assign Items to Flight",
-            true,
-            "Flights",
-            $"Flight: {id}, Items: {string.Join(",", request.ItemIds)}"
-        );
-
         return Ok(new { Success = true });
     }
 
     [HttpPost("{id}/unassign-items")]
+    [Audit("Unassign Items from Flight")]
     public async Task<IActionResult> UnassignItems(string id, [FromBody] FlightAssignmentRequest request)
     {
         await _repository.UnassignItemsFromFlightAsync(id, request.ItemIds);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Unassign Items from Flight",
-            true,
-            "Flights",
-            $"Flight: {id}, Items: {string.Join(",", request.ItemIds)}"
-        );
-
         return Ok(new { Success = true });
     }
 
     [HttpPost("optimize")]
+    [Audit("Optimize Flights")]
     public async Task<ActionResult<IEnumerable<VoyageCandidate>>> Optimize()
     {
         var vessels = (await _vesselRepository.GetVesselsAsync(mode: "Aviation")).ToList();
         var requests = (await _requestRepository.GetUnscheduledMovementRequestsAsync(mode: "Aviation")).ToList();
         var locations = (await _locationRepository.GetLocationsAsync()).ToList();
         var existingVoyages = (await _repository.GetFlightsAsync()).ToList();
-
-        // Note: IVoyageOptimizerService might still use Voyage internally, 
-        // we might need to map or update it too if it causes issues.
-        // For now, let's see if it compiles.
         
-        // Mapping existing flights back to Voyage if optimizer needs it
         var voyages = existingVoyages.Select(f => new Voyage {
             VoyageId = f.FlightId,
             VesselId = f.HelicopterId,
@@ -201,14 +190,6 @@ public class FlightsController : ControllerBase
             vessels,
             locations,
             voyages
-        );
-
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Optimize Flights",
-            true,
-            "Flights",
-            $"Generated {recommendations.Count} recommendations"
         );
 
         return Ok(recommendations);

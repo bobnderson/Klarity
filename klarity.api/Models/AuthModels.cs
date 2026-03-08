@@ -10,6 +10,7 @@ public class LoginResponse
     public string LastLogin { get; set; } = string.Empty;
     public List<MenuItemConfig> Menus { get; set; } = new();
     public string Jwt { get; set; } = string.Empty;
+    public bool MustChangePassword { get; set; }
 }
 
 public class UserRoleConfig
@@ -24,3 +25,6 @@ public class MenuItemConfig
     public string? Path { get; set; }
     public List<MenuItemConfig>? Children { get; set; }
 }
+
+public record ExternalLoginRequest(string Username, string Password);
+public record ChangePasswordRequest(string CurrentPassword, string NewPassword);

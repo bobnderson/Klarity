@@ -141,7 +141,6 @@ public class FlightRepository : IFlightRepository
             }
         }
 
-        // 2. Handle real flights from database
         const string flightSql = @"
             SELECT 
                 v.flight_id as FlightId, fs.helicopter_id as HelicopterId, fs.origin_id as OriginId, 
@@ -346,12 +345,16 @@ public class FlightRepository : IFlightRepository
                    r.origin_id, r.destination_id, 
                    r.earliest_departure, r.latest_arrival, 
                    r.requested_by, r.urgency_id, 
-                   r.business_unit_id, r.cost_centre, r.comments,
+                   r.business_unit_id, r.cost_centre, r.comments, r.notify,
+                   u.urgency_label as Urgency,
+                   bu.unit_name as BusinessUnitName,
                    loc_o.location_name as OriginName, loc_d.location_name as DestinationName,
                    i.item_id, i.request_id, i.item_type_id, i.quantity, 
                    i.description, i.weight, i.assigned_flight_id as AssignedVoyageId, i.status, i.is_hazardous
             FROM aviation.movement_requests r
             JOIN aviation.movement_request_items i ON r.request_id = i.request_id
+            LEFT JOIN logistics.urgencies u ON r.urgency_id = u.urgency_id
+            LEFT JOIN master.business_units bu ON r.business_unit_id = bu.unit_id
             LEFT JOIN logistics.locations loc_o ON r.origin_id = loc_o.location_id
             LEFT JOIN logistics.locations loc_d ON r.destination_id = loc_d.location_id
             WHERE i.assigned_flight_id = @flightId;";
@@ -385,13 +388,23 @@ public class FlightRepository : IFlightRepository
 
     public async Task<IEnumerable<Flight>> SearchFlightsAsync(string originId, string destinationId, DateTime travelDate, int paxCount)
     {
-        using var connection = _dbConnectionFactory.CreateConnection();
         var dateOnly = travelDate.Date;
-        var startDate = dateOnly; 
-        var endDate = dateOnly.AddDays(14).Add(new TimeSpan(23, 59, 59)); // 2 weeks window
+        var startDate = dateOnly;
+        var endDate = dateOnly.AddDays(14).Add(new TimeSpan(23, 59, 59));
 
-        // 1. Get real flights
-        const string flightSql = @"
+        var realFlights = await GetEligibleRealFlightsAsync(originId, destinationId, startDate, endDate, paxCount);
+        var schedules = await GetActiveSchedulesAsync(originId, destinationId);
+
+        var results = new List<Flight>(realFlights);
+        results.AddRange(MaterializeVirtualFlights(schedules, realFlights, dateOnly));
+
+        return results.OrderBy(r => r.DepartureDateTime);
+    }
+
+    private async Task<List<Flight>> GetEligibleRealFlightsAsync(string originId, string destinationId, DateTime startDate, DateTime endDate, int paxCount)
+    {
+        using var connection = _dbConnectionFactory.CreateConnection();
+        const string sql = @"
             SELECT 
                 v.flight_id as FlightId, fs.helicopter_id as HelicopterId, fs.origin_id as OriginId, 
                 fs.destination_id as DestinationId, 
@@ -416,11 +429,17 @@ public class FlightRepository : IFlightRepository
               AND v.plan_depart <= @endDate
               AND (12 - v.pax_count) >= @paxCount";
 
-        var realFlights = (await connection.QueryAsync<Flight>(flightSql, new { originId, destinationId, startDate, endDate, paxCount })).ToList();
+        return (await connection.QueryAsync<Flight>(sql, new { originId, destinationId, startDate, endDate, paxCount })).ToList();
+    }
 
-        // 2. Get schedules
-        const string scheduleSql = @"
-            SELECT s.*, h.helicopter_name as HelicopterName, 
+    private async Task<IEnumerable<FlightSchedule>> GetActiveSchedulesAsync(string originId, string destinationId)
+    {
+        using var connection = _dbConnectionFactory.CreateConnection();
+        const string sql = @"
+            SELECT s.schedule_id as ScheduleId, s.helicopter_id as HelicopterId, s.origin_id as OriginId, s.destination_id as DestinationId,
+                   s.departure_time as DepartureTime, s.duration_minutes as DurationMinutes, s.frequency as Frequency,
+                   s.days_of_week as DaysOfWeek, s.day_of_month as DayOfMonth, s.is_active as IsActive,
+                   h.helicopter_name as HelicopterName, 
                    lo.location_name as OriginName, 
                    ld.location_name as DestinationName
             FROM aviation.flight_schedules s
@@ -429,68 +448,66 @@ public class FlightRepository : IFlightRepository
             LEFT JOIN logistics.locations ld ON s.destination_id = ld.location_id
             WHERE s.origin_id = @originId AND s.destination_id = @destinationId AND s.is_active = 1";
 
-        var schedules = await connection.QueryAsync<dynamic>(scheduleSql, new { originId, destinationId });
+        return await connection.QueryAsync<FlightSchedule>(sql, new { originId, destinationId });
+    }
 
-        var results = new List<Flight>(realFlights);
-
-        // 3. Materialize virtual flights from schedules for the 14-day window
+    private IEnumerable<Flight> MaterializeVirtualFlights(IEnumerable<FlightSchedule> schedules, List<Flight> realFlights, DateTime startDate)
+    {
+        var virtualFlights = new List<Flight>();
         for (int i = 0; i <= 14; i++)
         {
-            var checkDate = dateOnly.AddDays(i);
+            var checkDate = startDate.AddDays(i);
             foreach (var schedule in schedules)
             {
-                bool applies = false;
-                string freq = schedule.frequency;
-                
-                if (freq == "Daily") applies = true;
-                else if (freq == "Weekly")
+                if (IsScheduleApplicableOnDate(schedule, checkDate))
                 {
-                    string dayName = checkDate.ToString("ddd"); // Mon, Tue...
-                    string days = schedule.days_of_week ?? "";
-                    if (days.Contains(dayName)) applies = true;
-                }
-                else if (freq == "Monthly")
-                {
-                    if (checkDate.Day == (int)schedule.day_of_month) applies = true;
-                }
-
-                if (applies)
-                {
-                    TimeSpan depTime = (TimeSpan)schedule.departure_time;
-                    DateTime depDateTime = checkDate.Add(depTime);
+                    DateTime depDateTime = checkDate.Add(schedule.DepartureTime);
                     depDateTime = DateTime.SpecifyKind(depDateTime, DateTimeKind.Unspecified);
-                    
-                    // Check if a real flight already exists for this schedule/time (approx check)
-                    bool alreadyExists = realFlights.Any(rf => 
-                        rf.HelicopterId == (string)schedule.helicopter_id && 
+
+                    bool alreadyExists = realFlights.Any(rf =>
+                        rf.HelicopterId == schedule.HelicopterId &&
                         Math.Abs((rf.DepartureDateTime - depDateTime).TotalMinutes) < 30);
 
                     if (!alreadyExists)
                     {
-                        var arrival = depDateTime.AddMinutes((int)schedule.duration_minutes);
-
-                        results.Add(new Flight
+                        virtualFlights.Add(new Flight
                         {
-                            FlightId = $"SCHED-{schedule.schedule_id}-{checkDate:yyyyMMdd}",
-                            HelicopterId = schedule.helicopter_id,
+                            FlightId = $"SCHED-{schedule.ScheduleId}-{checkDate:yyyyMMdd}",
+                            HelicopterId = schedule.HelicopterId,
                             HelicopterName = schedule.HelicopterName,
-                            OriginId = schedule.origin_id,
+                            OriginId = schedule.OriginId,
                             OriginName = schedule.OriginName,
-                            DestinationId = schedule.destination_id,
+                            DestinationId = schedule.DestinationId,
                             DestinationName = schedule.DestinationName,
                             DepartureDateTime = depDateTime,
-                            ArrivalDateTime = depDateTime.AddMinutes((int)schedule.duration_minutes),
+                            ArrivalDateTime = depDateTime.AddMinutes(schedule.DurationMinutes),
                             StatusId = "Scheduled (Auto)",
-                            PaxCapacity = 12, // Default
+                            PaxCapacity = 12,
                             PaxCurrent = 0,
-                            CostPerPax = 500 // Default
+                            CostPerPax = 500
                         });
                     }
                 }
             }
         }
+        return virtualFlights;
+    }
 
-        return results.OrderBy(r => r.DepartureDateTime);
+    private bool IsScheduleApplicableOnDate(FlightSchedule schedule, DateTime date)
+    {
+        string freq = schedule.Frequency;
+        if (freq == "Daily") return true;
+        if (freq == "Weekly")
+        {
+            string dayName = date.ToString("ddd");
+            string days = schedule.DaysOfWeek ?? "";
+            return days.Contains(dayName);
+        }
+        if (freq == "Monthly")
+        {
+            return date.Day == schedule.DayOfMonth;
+        }
+        return false;
     }
 
 }

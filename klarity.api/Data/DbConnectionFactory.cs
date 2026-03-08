@@ -14,15 +14,13 @@ public class DbConnectionFactory : IDbConnectionFactory
 
     public DbConnectionFactory(string connectionString, Utils.Security security)
     {
-        // Try to decrypt. If it's already plain text, encryption logic might fail or return trash, 
-        // but Diced pattern assumes it IS encrypted in appsettings.
         try 
         {
             _connectionString = security.Decrypt(connectionString);
         }
         catch 
         {
-            _connectionString = connectionString; // Fallback if not encrypted
+            _connectionString = connectionString;
         }
     }
 

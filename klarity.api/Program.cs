@@ -39,7 +39,8 @@ try
     // Add services to the container.
     builder.Services.AddControllers();
     builder.Services.AddScoped<IVoyageOptimizerService, VoyageOptimizerService>();
-builder.Services.AddMemoryCache();
+    builder.Services.AddMemoryCache();
+    builder.Services.AddHttpContextAccessor();
     
     // Configure CORS
     builder.Services.AddCors(options =>
@@ -104,11 +105,17 @@ builder.Services.AddMemoryCache();
     builder.Services.AddScoped<Klarity.Api.Data.IFlightRepository, Klarity.Api.Data.FlightRepository>();
     builder.Services.AddScoped<Klarity.Api.Data.IHelicopterRepository, Klarity.Api.Data.HelicopterRepository>();
     builder.Services.AddScoped<Klarity.Api.Data.ISettingsRepository, Klarity.Api.Data.SettingsRepository>();
+    builder.Services.AddScoped<Klarity.Api.Data.IPredefinedContainerRepository, Klarity.Api.Data.PredefinedContainerRepository>();
     builder.Services.AddScoped<Klarity.Api.Services.IActiveDirectoryService, Klarity.Api.Services.ActiveDirectoryService>();
+builder.Services.AddScoped<Klarity.Api.Services.IActiveDirectoryService, Klarity.Api.Services.ActiveDirectoryService>();
 builder.Services.AddScoped<Klarity.Api.Services.IEmailService, Klarity.Api.Services.EmailService>();
 builder.Services.AddScoped<Klarity.Api.Services.IPdfService, Klarity.Api.Services.PdfService>();
+builder.Services.AddScoped<Klarity.Api.Services.IManifestExportService, Klarity.Api.Services.ManifestExportService>();
+builder.Services.AddHostedService<Klarity.Api.Services.VoyageSchedulerService>();
 
     builder.Services.AddScoped<Klarity.Api.Data.IFlightScheduleRepository, Klarity.Api.Data.FlightScheduleRepository>();
+    builder.Services.AddScoped<Klarity.Api.Data.IVoyageScheduleRepository, Klarity.Api.Data.VoyageScheduleRepository>();
+    builder.Services.AddScoped<Klarity.Api.Data.INotificationRepository, Klarity.Api.Data.NotificationRepository>();
 
     // builder.Services.AddAuthentication(); 
 
@@ -135,12 +142,48 @@ builder.Services.AddScoped<Klarity.Api.Services.IPdfService, Klarity.Api.Service
     app.UseAuthorization();
 
     app.MapControllers();
-    app.MapFallbackToFile("index.html");
+
+// Force dotnet watch restart
+app.MapFallbackToFile("index.html");
 
     // Health check / Test endpoints
     app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow }));
 
-    app.Run();
+    // Temporarily run migration
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var dbFactory = scope.ServiceProvider.GetRequiredService<IDbConnectionFactory>();
+        using var conn = dbFactory.CreateConnection();
+        // Ignore if already exists
+        conn.Execute("IF NOT EXISTS(SELECT 1 FROM sys.columns WHERE Name = N'vessel_id' AND Object_ID = Object_ID(N'logistics.predefined_containers')) BEGIN ALTER TABLE logistics.predefined_containers ADD vessel_id VARCHAR(50); END");
+
+        // External User Support Migration
+        conn.Execute(@"
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('auth.users') AND name = 'is_external')
+            BEGIN
+                ALTER TABLE auth.users ADD is_external BIT NOT NULL DEFAULT 0;
+            END
+
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('auth.users') AND name = 'password_hash')
+            BEGIN
+                ALTER TABLE auth.users ADD password_hash NVARCHAR(MAX) NULL;
+            END
+
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID('auth.users') AND name = 'must_change_password')
+            BEGIN
+                ALTER TABLE auth.users ADD must_change_password BIT NOT NULL DEFAULT 0;
+            END
+        ");
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Migration failed");
+    }
+}
+
+app.Run();
 }
 catch (Exception ex)
 {

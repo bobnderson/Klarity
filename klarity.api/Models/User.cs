@@ -14,5 +14,9 @@ public class User
 
     public DateTime? LastLogin { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool IsExternal { get; set; }
+    public string? PasswordHash { get; set; }
+    public bool MustChangePassword { get; set; }
+    public string? Password { get; set; }
     public List<string> RoleIds { get; set; } = new();
 }

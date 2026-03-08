@@ -14,12 +14,9 @@ namespace Klarity.Api.Controllers;
 public class LocationsController : ControllerBase
 {
     private readonly ILocationRepository _locationRepository;
-    private readonly IAuditService _auditService;
-
-    public LocationsController(ILocationRepository locationRepository, IAuditService auditService)
+    public LocationsController(ILocationRepository locationRepository)
     {
         _locationRepository = locationRepository;
-        _auditService = auditService;
     }
 
     [HttpGet]
@@ -38,31 +35,31 @@ public class LocationsController : ControllerBase
     }
 
     [HttpPost]
+    [Audit("Create Location")]
     public async Task<ActionResult<Location>> CreateLocation(Location location)
     {
         var existing = await _locationRepository.GetLocationByIdAsync(location.LocationId);
         if (existing != null) return Conflict($"Location with ID '{location.LocationId}' already exists.");
 
         await _locationRepository.CreateLocationAsync(location);
-        await _auditService.LogAsync(User.Identity?.Name ?? "system", "Create Location", true, "Locations", System.Text.Json.JsonSerializer.Serialize(location));
         return CreatedAtAction(nameof(GetLocation), new { id = location.LocationId }, location);
     }
 
     [HttpPut("{id}")]
+    [Audit("Update Location")]
     public async Task<IActionResult> UpdateLocation(string id, Location location)
     {
         if (id != location.LocationId) return BadRequest("Path ID and Location ID mismatch.");
 
         await _locationRepository.UpdateLocationAsync(location);
-        await _auditService.LogAsync(User.Identity?.Name ?? "system", "Update Location", true, "Locations", System.Text.Json.JsonSerializer.Serialize(location));
         return NoContent();
     }
 
     [HttpDelete("{id}")]
+    [Audit("Delete Location")]
     public async Task<IActionResult> DeleteLocation(string id)
     {
         await _locationRepository.DeleteLocationAsync(id);
-        await _auditService.LogAsync(User.Identity?.Name ?? "system", "Delete Location", true, "Locations", id);
         return NoContent();
     }
 }

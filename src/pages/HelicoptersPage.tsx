@@ -102,7 +102,6 @@ export function HelicoptersPage() {
     setSaving(true);
     try {
       if (editingVessel) {
-        // Update
         await updateHelicopter(helicopter.helicopterId, helicopter);
         setVessels((prev) =>
           prev.map((v) =>
@@ -110,7 +109,6 @@ export function HelicoptersPage() {
           ),
         );
       } else {
-        // Create
         const created = await createHelicopter(helicopter);
         setVessels((prev) => [...prev, created]);
       }
@@ -185,350 +183,25 @@ export function HelicoptersPage() {
     >
       {view === "list" ? (
         <>
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <Box>
-              <Typography
-                variant="h5"
-                fontWeight="600"
-                sx={{ display: "flex", alignItems: "center", gap: 1 }}
-              >
-                <Plane size={24} color="var(--accent)" />
-                Helicopters
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Manage aviation fleet technical specifications and status.
-              </Typography>
-            </Box>
-            <Button
-              variant="contained"
-              startIcon={<Plus size={18} />}
-              onClick={handleCreate}
-              sx={{
-                bgcolor: "var(--accent)",
-                fontWeight: 700,
-                px: 3,
-                borderRadius: "8px",
-                "&:hover": { bgcolor: "var(--accent)", opacity: 0.9 },
-              }}
-            >
-              New Helicopter
-            </Button>
-          </Box>
+          <HelicoptersHeader onCreate={handleCreate} />
 
-          {/* Search & Filter Bar */}
-          <Box
-            sx={{
-              display: "flex",
-              gap: 2,
-              mb: 3,
-              p: 1.5,
-              bgcolor: "var(--panel)",
-              borderRadius: "12px",
-              border: "1px solid var(--border)",
-              alignItems: "center",
-              boxShadow:
-                "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-              transition: "all 0.2s ease-in-out",
-              "&:hover": {
-                borderColor: "rgba(255, 178, 0, 0.3)",
-              },
-            }}
-          >
-            <TextField
-              size="small"
-              placeholder="Search helicopter by name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              sx={{
-                flex: 1,
-                "& .MuiOutlinedInput-root": {
-                  bgcolor: "rgba(255,255,255,0.02)",
-                  borderRadius: "8px",
-                  "& fieldset": { borderColor: "transparent" },
-                  "&:hover fieldset": { borderColor: "transparent" },
-                  "&.Mui-focused fieldset": {
-                    borderColor: "var(--accent)",
-                    opacity: 0.5,
-                  },
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start" sx={{ mr: 1.5 }}>
-                    <Search
-                      size={18}
-                      color="var(--accent)"
-                      style={{ opacity: 0.8 }}
-                    />
-                  </InputAdornment>
-                ),
-                endAdornment: searchQuery && (
-                  <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      onClick={() => setSearchQuery("")}
-                      sx={{
-                        color: "var(--muted)",
-                        "&:hover": { color: "var(--danger)" },
-                      }}
-                    >
-                      <X size={14} />
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-
-            <Box
-              sx={{
-                width: "1px",
-                height: "24px",
-                bgcolor: "var(--border)",
-                mx: 1,
-              }}
-            />
-
-            <TextField
-              select
-              size="small"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              sx={{
-                width: 180,
-                "& .MuiOutlinedInput-root": {
-                  bgcolor: "rgba(255,255,255,0.02)",
-                  borderRadius: "8px",
-                  "& fieldset": { borderColor: "transparent" },
-                  "&:hover fieldset": { borderColor: "transparent" },
-                  "&.Mui-focused fieldset": {
-                    borderColor: "var(--accent)",
-                    opacity: 0.5,
-                  },
-                },
-              }}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start" sx={{ mr: 1 }}>
-                    <Filter
-                      size={18}
-                      color="var(--accent)"
-                      style={{ opacity: 0.8 }}
-                    />
-                  </InputAdornment>
-                ),
-              }}
-            >
-              <MuiMenuItem value="All" sx={{ fontSize: "0.875rem" }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Typography variant="body2">All Statuses</Typography>
-                </Box>
-              </MuiMenuItem>
-              {vesselStatuses.map((status) => {
-                const style = getVesselStatusStyle(status.status);
-                return (
-                  <MuiMenuItem
-                    key={status.statusId}
-                    value={status.statusId}
-                    sx={{ fontSize: "0.875rem" }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <Box
-                        sx={{
-                          w: 8,
-                          h: 8,
-                          borderRadius: "50%",
-                          // Map MUI colors to hex for the dot
-                          bgcolor:
-                            style.color === "success"
-                              ? "#10b981"
-                              : style.color === "warning"
-                                ? "#f59e0b"
-                                : style.color === "error"
-                                  ? "#ef4444"
-                                  : style.color === "info"
-                                    ? "#3b82f6"
-                                    : "#6b7280",
-                        }}
-                      />
-                      <Typography variant="body2">{status.status}</Typography>
-                    </Box>
-                  </MuiMenuItem>
-                );
-              })}
-            </TextField>
-
-            <Tooltip title="Refresh Data">
-              <IconButton
-                onClick={() => fetchData(true)}
-                disabled={loading}
-                sx={{
-                  color: "var(--accent)",
-                  bgcolor: "rgba(255, 178, 0, 0.05)",
-                  "&:hover": {
-                    bgcolor: "rgba(255, 178, 0, 0.1)",
-                  },
-                  ml: 1,
-                  border: "1px solid rgba(255, 178, 0, 0.2)",
-                  width: 40,
-                  height: 40,
-                }}
-              >
-                <RefreshCw
-                  size={18}
-                  className={loading ? "animate-spin" : ""}
-                />
-              </IconButton>
-            </Tooltip>
-          </Box>
+          <HelicoptersFilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            statusFilter={statusFilter}
+            onStatusChange={setStatusFilter}
+            vesselStatuses={vesselStatuses}
+            onRefresh={() => fetchData(true)}
+            loading={loading}
+          />
 
           {loading && <LoadingIndicator />}
 
-          <TableContainer
-            component={Paper}
-            sx={{
-              flex: 1,
-              bgcolor: "var(--panel)",
-              border: "1px solid var(--border)",
-              boxShadow: "var(--shadow-soft)",
-              overflowY: "auto",
-            }}
-          >
-            <Table stickyHeader>
-              <TableHead>
-                <TableRow sx={{ bgcolor: "rgba(255,255,255,0.02)" }}>
-                  <TableCell
-                    sx={{
-                      color: "var(--text-secondary)",
-                      fontWeight: 700,
-                      py: 2,
-                    }}
-                  >
-                    Name
-                  </TableCell>
-                  <TableCell
-                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                  >
-                    Type
-                  </TableCell>
-                  <TableCell
-                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                  >
-                    Owner
-                  </TableCell>
-                  <TableCell
-                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                  >
-                    Status
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                  >
-                    Cruise Speed (kts)
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                  >
-                    Payload (lb)
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                  >
-                    Max Range (NM)
-                  </TableCell>
-                  <TableCell
-                    align="right"
-                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                  >
-                    Seats
-                  </TableCell>
-                  <TableCell
-                    align="center"
-                    sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                  >
-                    Actions
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredVessels.map((vessel) => (
-                  <TableRow
-                    key={vessel.helicopterId}
-                    hover
-                    sx={{
-                      "&:last-child td, &:last-child th": { border: 0 },
-                      "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
-                    }}
-                  >
-                    <TableCell sx={{ fontWeight: 600, color: "var(--text)" }}>
-                      {vessel.helicopterName}
-                    </TableCell>
-                    <TableCell sx={{ color: "var(--text)" }}>
-                      {vessel.helicopterTypeName ||
-                        vessel.helicopterTypeId ||
-                        "-"}
-                    </TableCell>
-                    <TableCell sx={{ color: "var(--text)" }}>
-                      {vessel.owner || "-"}
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const statusObj = vesselStatuses.find(
-                          (s) => s.statusId === vessel.statusId,
-                        );
-                        const statusName =
-                          statusObj?.status || vessel.statusId || "Unknown";
-                        const style = getVesselStatusStyle(statusName);
-                        return (
-                          <Chip
-                            variant="outlined"
-                            label={style.label}
-                            size="small"
-                            color={style.color as any}
-                            sx={{
-                              fontWeight: 600,
-                              fontSize: "0.65rem",
-                              height: 20,
-                              px: 0.5,
-                            }}
-                          />
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell align="right" sx={{ color: "var(--text)" }}>
-                      {formatNumber(vessel.cruiseAirspeedKts)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ color: "var(--text)" }}>
-                      {formatNumber(vessel.availablePayloadLb)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ color: "var(--text)" }}>
-                      {formatNumber(vessel.rangeNm)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ color: "var(--text)" }}>
-                      {formatNumber(vessel.passengerSeats)}
-                    </TableCell>
-                    <TableCell align="center">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => handleActionClick(e, vessel)}
-                        sx={{ color: "var(--muted)" }}
-                      >
-                        <MoreVertical size={18} />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <HelicoptersTable
+            vessels={filteredVessels}
+            vesselStatuses={vesselStatuses}
+            onActionClick={handleActionClick}
+          />
         </>
       ) : (
         <HelicopterDesign
@@ -563,46 +236,432 @@ export function HelicoptersPage() {
         </Typography>
       </Backdrop>
 
-      <Menu
+      <HelicopterActionMenu
         anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
+        selectedVessel={selectedVessel}
         onClose={handleActionClose}
-        PaperProps={{
-          sx: {
-            bgcolor: "var(--panel)",
-            border: "1px solid var(--border)",
-            minWidth: 160,
-          },
-        }}
-      >
-        <MuiMenuItem
-          onClick={() => {
-            if (selectedVessel) handleEdit(selectedVessel);
-            handleActionClose();
-          }}
-          sx={{ gap: 1.5, fontSize: "0.875rem" }}
-        >
-          <Edit2 size={16} color="var(--accent)" />
-          Edit Helicopter
-        </MuiMenuItem>
-        <MuiMenuItem
-          onClick={handleActionClose}
-          sx={{ gap: 1.5, fontSize: "0.875rem" }}
-        >
-          <Settings size={16} color="var(--text-secondary)" />
-          Technical Specs
-        </MuiMenuItem>
-        <MuiMenuItem
-          onClick={() => {
-            if (selectedVessel) handleDeleteClick(selectedVessel);
-            handleActionClose();
-          }}
-          sx={{ gap: 1.5, fontSize: "0.875rem", color: "var(--danger)" }}
-        >
-          <Trash2 size={16} />
-          Delete
-        </MuiMenuItem>
-      </Menu>
+        onEdit={handleEdit}
+        onDelete={handleDeleteClick}
+      />
     </Box>
   );
 }
+
+// --- Sub-components ---
+
+interface HelicoptersHeaderProps {
+  onCreate: () => void;
+}
+
+const HelicoptersHeader = ({ onCreate }: HelicoptersHeaderProps) => (
+  <Box
+    sx={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+    }}
+  >
+    <Box>
+      <Typography
+        variant="h5"
+        fontWeight="600"
+        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+      >
+        <Plane size={24} color="var(--accent)" />
+        Helicopters
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        Manage aviation fleet technical specifications and status.
+      </Typography>
+    </Box>
+    <Button
+      variant="contained"
+      startIcon={<Plus size={18} />}
+      onClick={onCreate}
+      sx={{
+        bgcolor: "var(--accent)",
+        fontWeight: 700,
+        px: 3,
+        borderRadius: "8px",
+        "&:hover": { bgcolor: "var(--accent)", opacity: 0.9 },
+      }}
+    >
+      New Helicopter
+    </Button>
+  </Box>
+);
+
+interface HelicoptersFilterBarProps {
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  statusFilter: string;
+  onStatusChange: (status: string) => void;
+  vesselStatuses: VesselStatus[];
+  onRefresh: () => void;
+  loading: boolean;
+}
+
+const HelicoptersFilterBar = ({
+  searchQuery,
+  onSearchChange,
+  statusFilter,
+  onStatusChange,
+  vesselStatuses,
+  onRefresh,
+  loading,
+}: HelicoptersFilterBarProps) => (
+  <Box
+    sx={{
+      display: "flex",
+      gap: 2,
+      mb: 3,
+      p: 1.5,
+      bgcolor: "var(--panel)",
+      borderRadius: "12px",
+      border: "1px solid var(--border)",
+      alignItems: "center",
+      boxShadow:
+        "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+      transition: "all 0.2s ease-in-out",
+      "&:hover": {
+        borderColor: "rgba(255, 178, 0, 0.3)",
+      },
+    }}
+  >
+    <TextField
+      size="small"
+      placeholder="Search helicopter by name..."
+      value={searchQuery}
+      onChange={(e) => onSearchChange(e.target.value)}
+      sx={{
+        flex: 1,
+        "& .MuiOutlinedInput-root": {
+          bgcolor: "rgba(255,255,255,0.02)",
+          borderRadius: "8px",
+          "& fieldset": { borderColor: "transparent" },
+          "&:hover fieldset": { borderColor: "transparent" },
+          "&.Mui-focused fieldset": {
+            borderColor: "var(--accent)",
+            opacity: 0.5,
+          },
+        },
+      }}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start" sx={{ mr: 1.5 }}>
+            <Search size={18} color="var(--accent)" style={{ opacity: 0.8 }} />
+          </InputAdornment>
+        ),
+        endAdornment: searchQuery && (
+          <InputAdornment position="end">
+            <IconButton
+              size="small"
+              onClick={() => onSearchChange("")}
+              sx={{
+                color: "var(--muted)",
+                "&:hover": { color: "var(--danger)" },
+              }}
+            >
+              <X size={14} />
+            </IconButton>
+          </InputAdornment>
+        ),
+      }}
+    />
+
+    <Box
+      sx={{
+        width: "1px",
+        height: "24px",
+        bgcolor: "var(--border)",
+        mx: 1,
+      }}
+    />
+
+    <TextField
+      select
+      size="small"
+      value={statusFilter}
+      onChange={(e) => onStatusChange(e.target.value)}
+      sx={{
+        width: 180,
+        "& .MuiOutlinedInput-root": {
+          bgcolor: "rgba(255,255,255,0.02)",
+          borderRadius: "8px",
+          "& fieldset": { borderColor: "transparent" },
+          "&:hover fieldset": { borderColor: "transparent" },
+          "&.Mui-focused fieldset": {
+            borderColor: "var(--accent)",
+            opacity: 0.5,
+          },
+        },
+      }}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start" sx={{ mr: 1 }}>
+            <Filter size={18} color="var(--accent)" style={{ opacity: 0.8 }} />
+          </InputAdornment>
+        ),
+      }}
+    >
+      <MuiMenuItem value="All" sx={{ fontSize: "0.875rem" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography variant="body2">All Statuses</Typography>
+        </Box>
+      </MuiMenuItem>
+      {vesselStatuses.map((status) => {
+        const style = getVesselStatusStyle(status.status);
+        return (
+          <MuiMenuItem
+            key={status.statusId}
+            value={status.statusId}
+            sx={{ fontSize: "0.875rem" }}
+          >
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  bgcolor:
+                    style.color === "success"
+                      ? "#10b981"
+                      : style.color === "warning"
+                        ? "#f59e0b"
+                        : style.color === "error"
+                          ? "#ef4444"
+                          : style.color === "info"
+                            ? "#3b82f6"
+                            : "#6b7280",
+                }}
+              />
+              <Typography variant="body2">{status.status}</Typography>
+            </Box>
+          </MuiMenuItem>
+        );
+      })}
+    </TextField>
+
+    <Tooltip title="Refresh Data">
+      <IconButton
+        onClick={onRefresh}
+        disabled={loading}
+        sx={{
+          color: "var(--accent)",
+          bgcolor: "rgba(255, 178, 0, 0.05)",
+          "&:hover": {
+            bgcolor: "rgba(255, 178, 0, 0.1)",
+          },
+          ml: 1,
+          border: "1px solid rgba(255, 178, 0, 0.2)",
+          width: 40,
+          height: 40,
+        }}
+      >
+        <RefreshCw size={18} className={loading ? "animate-spin" : ""} />
+      </IconButton>
+    </Tooltip>
+  </Box>
+);
+
+interface HelicoptersTableProps {
+  vessels: Helicopter[];
+  vesselStatuses: VesselStatus[];
+  onActionClick: (
+    event: React.MouseEvent<HTMLButtonElement>,
+    vessel: Helicopter,
+  ) => void;
+}
+
+const HelicoptersTable = ({
+  vessels,
+  vesselStatuses,
+  onActionClick,
+}: HelicoptersTableProps) => (
+  <TableContainer
+    component={Paper}
+    sx={{
+      flex: 1,
+      bgcolor: "var(--panel)",
+      border: "1px solid var(--border)",
+      boxShadow: "var(--shadow-soft)",
+      overflowY: "auto",
+    }}
+  >
+    <Table stickyHeader>
+      <TableHead>
+        <TableRow sx={{ bgcolor: "rgba(255,255,255,0.02)" }}>
+          <TableCell
+            sx={{
+              color: "var(--text-secondary)",
+              fontWeight: 700,
+              py: 2,
+            }}
+          >
+            Name
+          </TableCell>
+          <TableCell sx={{ color: "var(--text-secondary)", fontWeight: 700 }}>
+            Type
+          </TableCell>
+          <TableCell sx={{ color: "var(--text-secondary)", fontWeight: 700 }}>
+            Owner
+          </TableCell>
+          <TableCell sx={{ color: "var(--text-secondary)", fontWeight: 700 }}>
+            Status
+          </TableCell>
+          <TableCell
+            align="right"
+            sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+          >
+            Cruise Speed (kts)
+          </TableCell>
+          <TableCell
+            align="right"
+            sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+          >
+            Payload (lb)
+          </TableCell>
+          <TableCell
+            align="right"
+            sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+          >
+            Max Range (NM)
+          </TableCell>
+          <TableCell
+            align="right"
+            sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+          >
+            Seats
+          </TableCell>
+          <TableCell
+            align="center"
+            sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+          >
+            Actions
+          </TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {vessels.map((vessel) => (
+          <TableRow
+            key={vessel.helicopterId}
+            hover
+            sx={{
+              "&:last-child td, &:last-child th": { border: 0 },
+              "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
+            }}
+          >
+            <TableCell sx={{ fontWeight: 600, color: "var(--text)" }}>
+              {vessel.helicopterName}
+            </TableCell>
+            <TableCell sx={{ color: "var(--text)" }}>
+              {vessel.helicopterTypeName || vessel.helicopterTypeId || "-"}
+            </TableCell>
+            <TableCell sx={{ color: "var(--text)" }}>
+              {vessel.owner || "-"}
+            </TableCell>
+            <TableCell>
+              {(() => {
+                const statusObj = vesselStatuses.find(
+                  (s) => s.statusId === vessel.statusId,
+                );
+                const statusName =
+                  statusObj?.status || vessel.statusId || "Unknown";
+                const style = getVesselStatusStyle(statusName);
+                return (
+                  <Chip
+                    variant="outlined"
+                    label={style.label}
+                    size="small"
+                    color={style.color as any}
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: "0.65rem",
+                      height: 20,
+                      px: 0.5,
+                    }}
+                  />
+                );
+              })()}
+            </TableCell>
+            <TableCell align="right" sx={{ color: "var(--text)" }}>
+              {formatNumber(vessel.cruiseAirspeedKts)}
+            </TableCell>
+            <TableCell align="right" sx={{ color: "var(--text)" }}>
+              {formatNumber(vessel.availablePayloadLb)}
+            </TableCell>
+            <TableCell align="right" sx={{ color: "var(--text)" }}>
+              {formatNumber(vessel.rangeNm)}
+            </TableCell>
+            <TableCell align="right" sx={{ color: "var(--text)" }}>
+              {formatNumber(vessel.passengerSeats)}
+            </TableCell>
+            <TableCell align="center">
+              <IconButton
+                size="small"
+                onClick={(e) => onActionClick(e, vessel)}
+                sx={{ color: "var(--muted)" }}
+              >
+                <MoreVertical size={18} />
+              </IconButton>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  </TableContainer>
+);
+
+interface HelicopterActionMenuProps {
+  anchorEl: HTMLElement | null;
+  selectedVessel: Helicopter | null;
+  onClose: () => void;
+  onEdit: (vessel: Helicopter) => void;
+  onDelete: (vessel: Helicopter) => void;
+}
+
+const HelicopterActionMenu = ({
+  anchorEl,
+  selectedVessel,
+  onClose,
+  onEdit,
+  onDelete,
+}: HelicopterActionMenuProps) => (
+  <Menu
+    anchorEl={anchorEl}
+    open={Boolean(anchorEl)}
+    onClose={onClose}
+    PaperProps={{
+      sx: {
+        bgcolor: "var(--panel)",
+        border: "1px solid var(--border)",
+        minWidth: 160,
+      },
+    }}
+  >
+    <MuiMenuItem
+      onClick={() => {
+        if (selectedVessel) onEdit(selectedVessel);
+        onClose();
+      }}
+      sx={{ gap: 1.5, fontSize: "0.875rem" }}
+    >
+      <Edit2 size={16} color="var(--accent)" />
+      Edit Helicopter
+    </MuiMenuItem>
+    <MuiMenuItem onClick={onClose} sx={{ gap: 1.5, fontSize: "0.875rem" }}>
+      <Settings size={16} color="var(--text-secondary)" />
+      Technical Specs
+    </MuiMenuItem>
+    <MuiMenuItem
+      onClick={() => {
+        if (selectedVessel) onDelete(selectedVessel);
+        onClose();
+      }}
+      sx={{ gap: 1.5, fontSize: "0.875rem", color: "var(--danger)" }}
+    >
+      <Trash2 size={16} />
+      Delete
+    </MuiMenuItem>
+  </Menu>
+);

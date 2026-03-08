@@ -22,16 +22,12 @@ namespace Klarity.Api.Utils
                 return;
             }
 
-            bool isTokenValid = security.EvaluateToken<dynamic>(context.HttpContext.Request, out var userData);
+            bool isTokenValid = security.EvaluateToken<System.Text.Json.JsonDocument>(context.HttpContext.Request, out var userData);
 
             if (!isTokenValid)
             {
                 Console.WriteLine($"Authorize: Invalid or missing token for {context.HttpContext.Request.Path}");
                 context.Result = new UnauthorizedResult();
-            }
-            else
-            {
-                // Optional: Console.WriteLine($"Authorize: Access granted for {context.HttpContext.Request.Path}");
             }
         }
     }

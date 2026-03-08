@@ -18,6 +18,7 @@ import {
   Users as UsersIcon,
   Briefcase,
   ChevronLeft,
+  Calendar,
 } from "lucide-react";
 import dayjs from "dayjs";
 import { getMovementRequestById } from "../../services/maritime/marineMovementService";
@@ -238,6 +239,72 @@ export default function AviationApprovalPage() {
               </Grid>
             </Grid>
 
+            {request.selectedVoyageId && (
+              <Box
+                sx={{
+                  mb: 4,
+                  p: 2,
+                  borderRadius: "16px",
+                  bgcolor: "var(--accent-soft)",
+                  border: "1px solid var(--accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                }}
+              >
+                <Calendar size={20} color="var(--accent)" />
+                <Box>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "var(--accent)", fontWeight: 700 }}
+                  >
+                    SELECTED FLIGHT
+                  </Typography>
+                  <Typography variant="body2" fontWeight={800}>
+                    {request.vesselName || "Unknown Flight"}
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 3, mt: 0.5 }}>
+                    <Box>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "var(--text-secondary)",
+                          display: "block",
+                        }}
+                      >
+                        DEPARTURE
+                      </Typography>
+                      <Typography variant="body2" fontWeight={700}>
+                        {request.scheduledDeparture
+                          ? dayjs(request.scheduledDeparture).format(
+                              "DD MMM, HH:mm",
+                            )
+                          : "-"}
+                      </Typography>
+                    </Box>
+                    <Box>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          color: "var(--text-secondary)",
+                          display: "block",
+                        }}
+                      >
+                        ARRIVAL
+                      </Typography>
+                      <Typography variant="body2" fontWeight={700}>
+                        {request.scheduledArrival
+                          ? dayjs(request.scheduledArrival).format(
+                              "DD MMM, HH:mm",
+                            )
+                          : "-"}
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              </Box>
+            )}
+
             <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
               Passengers & Cargo
             </Typography>
@@ -324,7 +391,7 @@ export default function AviationApprovalPage() {
               fullWidth
               label="Approver Comments"
               multiline
-              rows={4}
+              rows={2}
               value={comments}
               onChange={(e) => setComments(e.target.value)}
               placeholder="Enter reason for approval or rejection..."

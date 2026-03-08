@@ -125,8 +125,7 @@ namespace Klarity.Api.Data
 
                 await connection.ExecuteAsync(sql, paramsList.Select(p => new { p.Key, p.Value, p.Desc, UpdatedBy = updatedBy }), transaction);
                 transaction.Commit();
-
-                // Invalidate cache
+                
                 _cache.Remove(SmtpSettingsCacheKey);
             }
             catch

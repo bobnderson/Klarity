@@ -5,6 +5,8 @@ using System.Text;
 using Dapper;
 using Klarity.Api.Data;
 using Klarity.Api.Models;
+using Klarity.Api.Services;
+using Klarity.Api.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
@@ -19,23 +21,30 @@ public class AuthController : ControllerBase
     private readonly ILogger<AuthController> _logger;
     private readonly Services.IAuditService _auditService;
     private readonly Data.IAuthRepository _authRepository;
+    private readonly Data.IAdminRepository _adminRepository; // Added
     private readonly Utils.Security _security;
-
+    private readonly IEmailService _emailService; // Added
+    
     public AuthController(
         IConfiguration configuration,
         ILogger<AuthController> logger,
         Services.IAuditService auditService,
         Data.IAuthRepository authRepository,
-        Utils.Security security)
+        Data.IAdminRepository adminRepository, // Added
+        Utils.Security security,
+        IEmailService emailService) // Added
     {
         _configuration = configuration;
         _logger = logger;
         _auditService = auditService;
         _authRepository = authRepository;
+        _adminRepository = adminRepository; // Added
         _security = security;
+        _emailService = emailService; // Added
     }
 
     [HttpGet("login")]
+    [AllowAnonymous]
     public async Task<IActionResult> Login()
     {
         var samAccountNameResult = ResolveAccountName();
@@ -88,6 +97,79 @@ public class AuthController : ControllerBase
         }
     }
 
+    [HttpPost("login/external")]
+    [AllowAnonymous]
+    public async Task<IActionResult> LoginExternal([FromBody] ExternalLoginRequest request)
+    {
+        try
+        {
+            var loginData = await _authRepository.GetLoginDataAsync(request.Username);
+
+            if (loginData.User == null || !loginData.User.IsExternal)
+            {
+                _logger.LogWarning("External login failed: User {Username} not found or not external.", request.Username);
+                return Unauthorized("Invalid username or password.");
+            }
+
+            if (!_security.VerifyPassword(request.Password, loginData.User.PasswordHash ?? string.Empty))
+            {
+                _logger.LogWarning("External login failed: Invalid password for {Username}.", request.Username);
+                return Unauthorized("Invalid username or password.");
+            }
+
+            var response = new LoginResponse
+            {
+                AccountId = loginData.User.AccountId,
+                AccountName = loginData.User.AccountName,
+                LastLogin = loginData.User.LastLogin?.ToString() ?? string.Empty,
+                Roles = loginData.Roles.ToList(),
+                MustChangePassword = loginData.User.MustChangePassword
+            };
+
+            if (!response.Roles.Any())
+            {
+                return Unauthorized("User has no roles assigned.");
+            }
+
+            response.Menus = BuildHierarchicalMenu(loginData.Menus);
+            response.Jwt = _security.GenerateToken(new { AccountId = response.AccountId, Roles = response.Roles });
+
+            await _authRepository.UpdateLastLoginAsync(request.Username);
+            await _auditService.LogAsync(request.Username, "External Login", true, "Auth");
+
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during external login for {Username}", request.Username);
+            return StatusCode(500, "An internal error occurred during login.");
+        }
+    }
+
+    [HttpPost("change-password")]
+    [Klarity.Api.Utils.TokenAuthorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request)
+    {
+        var accountId = _security.GetAccountIdFromRequest(Request);
+        if (accountId == "Unknown") return Unauthorized();
+
+        var loginData = await _authRepository.GetLoginDataAsync(accountId);
+        if (loginData.User == null || !loginData.User.IsExternal)
+            return BadRequest("Only external users can change passwords this way.");
+
+        if (!_security.VerifyPassword(request.CurrentPassword, loginData.User.PasswordHash ?? string.Empty))
+            return BadRequest("Current password is incorrect.");
+
+        var validation = _security.ValidatePassword(request.NewPassword);
+        if (!validation.IsValid) return BadRequest(validation.Message);
+
+        var newHash = _security.HashPassword(request.NewPassword);
+        await _adminRepository.UpdatePasswordHashAsync(accountId, newHash);
+        
+        await _auditService.LogAsync(accountId, "Change Password", true, "Auth");
+        return Ok(new { message = "Password changed successfully." });
+    }
+
     private (string? Value, IActionResult? Error) ResolveAccountName()
     {
         var useDevUser = _configuration.GetValue<bool>("DevAuth:UseDevUser");
@@ -124,37 +206,6 @@ public class AuthController : ControllerBase
                     Path = (string)c.ItemPath
                 }).ToList()
             }).ToList();
-
-        // Inject Aviation Menu for Development/Demo
-        var aviationMenu = menus.FirstOrDefault(m => m.Label == "Aviation");
-        var aviationItems = new List<MenuItemConfig>
-        {
-            new MenuItemConfig { Label = "Dashboard", Path = "/aviation-dashboard" },
-            new MenuItemConfig { Label = "Planner", Path = "/aviation-planner" },
-            new MenuItemConfig { Label = "Request", Path = "/aviation-request" },
-            new MenuItemConfig { Label = "Helicopters", Path = "/aviation-helicopters" },
-            new MenuItemConfig { Label = "Schedules", Path = "/aviation-schedules" }
-        };
-
-        if (aviationMenu != null)
-        {
-            // Add items that aren't already there
-            foreach (var item in aviationItems)
-            {
-                if (!aviationMenu.Children.Any(c => c.Label == item.Label))
-                {
-                    aviationMenu.Children.Add(item);
-                }
-            }
-        }
-        else
-        {
-            menus.Add(new MenuItemConfig
-            {
-                Label = "Aviation",
-                Children = aviationItems
-            });
-        }
 
         return menus;
     }

@@ -3,7 +3,9 @@ using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Primitives;
+using BCrypt.Net;
 
 namespace Klarity.Api.Utils
 {
@@ -136,6 +138,50 @@ namespace Klarity.Api.Utils
             }
 
             return key.Substring(0, 32);
+        }
+
+        public string GetAccountIdFromRequest(HttpRequest request)
+        {
+            if (EvaluateToken<JsonDocument>(request, out var userData))
+            {
+                if (userData?.RootElement.TryGetProperty("AccountId", out var accountIdElement) == true)
+                {
+                    var accountId = accountIdElement.GetString();
+                    return string.IsNullOrEmpty(accountId) ? "Unknown" : accountId;
+                }
+            }
+            return "Unknown";
+        }
+
+        public string HashPassword(string password)
+        {
+            return BCrypt.Net.BCrypt.HashPassword(password);
+        }
+
+        public bool VerifyPassword(string password, string hash)
+        {
+            if (string.IsNullOrEmpty(hash)) return false;
+            return BCrypt.Net.BCrypt.Verify(password, hash);
+        }
+
+        public (bool IsValid, string Message) ValidatePassword(string password)
+        {
+            if (string.IsNullOrEmpty(password) || password.Length < 12)
+                return (false, "Password must be at least 12 characters long.");
+
+            if (!Regex.IsMatch(password, @"[A-Z]"))
+                return (false, "Password must contain at least one uppercase letter.");
+
+            if (!Regex.IsMatch(password, @"[a-z]"))
+                return (false, "Password must contain at least one lowercase letter.");
+
+            if (!Regex.IsMatch(password, @"[0-9]"))
+                return (false, "Password must contain at least one number.");
+
+            if (!Regex.IsMatch(password, @"[^a-zA-Z0-9]"))
+                return (false, "Password must contain at least one special character.");
+
+            return (true, string.Empty);
         }
     }
 }

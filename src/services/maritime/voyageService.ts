@@ -3,6 +3,7 @@ import type {
   NewVoyage,
   Voyage,
   VoyageCandidate,
+  VoyageSchedule,
 } from "../../types/maritime/marine";
 import type { MovementRequest } from "../../types/maritime/logistics";
 
@@ -74,4 +75,26 @@ export const getVoyageManifest = async (
 export const optimizeVoyagePlan = async (): Promise<VoyageCandidate[]> => {
   const response = await api.post<VoyageCandidate[]>("voyages/optimize");
   return response.data;
+};
+
+export const createVoyageSchedule = async (
+  schedule: VoyageSchedule,
+): Promise<VoyageSchedule> => {
+  const response = await api.post<VoyageSchedule>("voyageSchedules", schedule);
+  return response.data;
+};
+
+export const getVoyageSchedules = async (): Promise<VoyageSchedule[]> => {
+  const response = await api.get<VoyageSchedule[]>("voyageSchedules");
+  return response.data;
+};
+
+export const updateVoyageSchedule = async (
+  schedule: VoyageSchedule,
+): Promise<void> => {
+  await api.put(`voyageSchedules/${schedule.scheduleId}`, schedule);
+};
+
+export const deleteVoyageSchedule = async (id: string): Promise<void> => {
+  await api.delete(`voyageSchedules/${id}`);
 };

@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -25,6 +25,7 @@ import {
   CheckCircle2,
   Trash2,
   Plane,
+  RotateCcw,
 } from "lucide-react";
 import { CARGO_TYPE_CONFIG } from "../../types/maritime/marine";
 import type { UnifiedVessel, UnifiedVoyage } from "../../types/maritime/marine";
@@ -38,6 +39,7 @@ import {
   updateFlight,
   deleteFlight,
 } from "../../services/maritime/flightService";
+import { getVoyageStatuses } from "../../services/maritime/referenceDataService";
 import { toast } from "react-toastify";
 
 interface VesselTrackProps {
@@ -71,6 +73,9 @@ export function VesselTrack({
   >(null);
   const [isLoading, setIsLoading] = useState(false);
   const [pendingStatusId, setPendingStatusId] = useState<string | null>(null);
+  const [availableStatuses, setAvailableStatuses] = useState<
+    { id: string; label: string; color: string }[]
+  >([]);
 
   const [statusMenuAnchor, setStatusMenuAnchor] = useState<null | HTMLElement>(
     null,
@@ -175,14 +180,33 @@ export function VesselTrack({
     }
   };
 
-  const availableStatuses = [
-    { id: "scheduled", label: "Scheduled", color: "var(--info)" },
-    { id: "enroute", label: "En Route", color: "var(--success)" },
-    { id: "arrived", label: "Arrived", color: "var(--success)" },
-    { id: "completed", label: "Completed", color: "var(--muted)" },
-    { id: "delayed", label: "Delayed", color: "var(--error)" },
-    { id: "cancelled", label: "Cancelled", color: "var(--error)" },
-  ];
+  useEffect(() => {
+    const loadStatuses = async () => {
+      try {
+        const statuses = await getVoyageStatuses();
+        setAvailableStatuses(
+          statuses.map((s) => {
+            const style = getVoyageStatusStyle(s.status);
+            const colorMap: Record<string, string> = {
+              success: "var(--success)",
+              error: "var(--danger)",
+              warning: "var(--warning)",
+              info: "var(--info)",
+              default: "var(--muted)",
+            };
+            return {
+              id: s.statusId,
+              label: s.status,
+              color: colorMap[style.color] || "var(--muted)",
+            };
+          }),
+        );
+      } catch (e) {
+        console.error("Failed to fetch voyage statuses", e);
+      }
+    };
+    loadStatuses();
+  }, []);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -319,6 +343,23 @@ export function VesselTrack({
                   {voyage.destinationName ||
                     voyage.destinationId ||
                     voyage.destination}
+                  {voyage.scheduleId && (
+                    <Tooltip title="Recurring Voyage" arrow>
+                      <Box
+                        component="span"
+                        sx={{
+                          ml: 1,
+                          color: "var(--accent)",
+                          display: "inline-flex",
+                        }}
+                      >
+                        <RotateCcw
+                          size={10}
+                          style={{ verticalAlign: "middle" }}
+                        />
+                      </Box>
+                    </Tooltip>
+                  )}
                 </span>
                 <Box
                   sx={{

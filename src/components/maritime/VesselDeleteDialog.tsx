@@ -48,7 +48,7 @@ export function VesselDeleteDialog({
       onClose={handleClose}
       PaperProps={{
         sx: {
-          bgcolor: "#0f172a",
+          bgcolor: "var(--panel)",
           border: "1px solid var(--border)",
           color: "var(--text)",
           minWidth: "400px",

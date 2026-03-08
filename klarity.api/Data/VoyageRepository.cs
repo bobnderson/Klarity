@@ -29,6 +29,7 @@ public class VoyageRepository : IVoyageRepository
     private readonly ISettingsRepository _settingsRepository;
     private readonly Services.IPdfService _pdfService;
     private readonly IServiceScopeFactory _serviceScopeFactory;
+    private readonly INotificationRepository _notificationRepository;
     private readonly ILogger<VoyageRepository> _logger;
 
     public VoyageRepository(
@@ -37,6 +38,7 @@ public class VoyageRepository : IVoyageRepository
         ISettingsRepository settingsRepository,
         Services.IPdfService pdfService,
         IServiceScopeFactory serviceScopeFactory,
+        INotificationRepository notificationRepository,
         ILogger<VoyageRepository> logger)
     {
         _dbConnectionFactory = dbConnectionFactory;
@@ -44,6 +46,7 @@ public class VoyageRepository : IVoyageRepository
         _settingsRepository = settingsRepository;
         _pdfService = pdfService;
         _serviceScopeFactory = serviceScopeFactory;
+        _notificationRepository = notificationRepository;
         _logger = logger;
     }
 
@@ -53,7 +56,7 @@ public class VoyageRepository : IVoyageRepository
         const string sql = @"
             SELECT 
                 v.voyage_id, v.vessel_id, v.origin_id, v.destination_id, 
-                v.departure_date_time, v.eta, v.weight_util, v.deck_util, v.cabin_util, v.status_id,
+                v.departure_date_time, v.eta, v.weight_util, v.deck_util, v.cabin_util, v.status_id, v.schedule_id as ScheduleId,
                 ve.vessel_name,
                 lo.location_name as origin_name,
                 ld.location_name as destination_name,
@@ -74,7 +77,7 @@ public class VoyageRepository : IVoyageRepository
         const string sql = @"
             SELECT 
                 v.voyage_id, v.vessel_id, v.origin_id, v.destination_id, 
-                v.departure_date_time, v.eta, v.weight_util, v.deck_util, v.cabin_util, v.status_id,
+                v.departure_date_time, v.eta, v.weight_util, v.deck_util, v.cabin_util, v.status_id, v.schedule_id as ScheduleId,
                 ve.vessel_name,
                 lo.location_name as origin_name,
                 ld.location_name as destination_name
@@ -93,7 +96,7 @@ public class VoyageRepository : IVoyageRepository
         const string voyageSql = @"
             SELECT 
                 v.voyage_id, v.vessel_id, v.origin_id, v.destination_id, 
-                v.departure_date_time, v.eta, v.weight_util, v.deck_util, v.cabin_util, v.status_id, v.is_deleted,
+                v.departure_date_time, v.eta, v.weight_util, v.deck_util, v.cabin_util, v.status_id, v.is_deleted, v.schedule_id as ScheduleId,
                 ve.vessel_name,
                 lo.location_name as origin_name,
                 ld.location_name as destination_name
@@ -125,7 +128,7 @@ public class VoyageRepository : IVoyageRepository
         const string sql = @"
             SELECT 
                 v.voyage_id, v.vessel_id, v.origin_id, v.destination_id, 
-                v.departure_date_time, v.eta, v.weight_util, v.deck_util, v.cabin_util, v.status_id, v.is_deleted,
+                v.departure_date_time, v.eta, v.weight_util, v.deck_util, v.cabin_util, v.status_id, v.is_deleted, v.schedule_id as ScheduleId,
                 ve.vessel_name,
                 lo.location_name as origin_name,
                 ld.location_name as destination_name
@@ -141,6 +144,12 @@ public class VoyageRepository : IVoyageRepository
     public async Task CreateVoyageAsync(Voyage voyage)
     {
         using var connection = _dbConnectionFactory.CreateConnection();
+        
+        if (string.IsNullOrEmpty(voyage.VoyageId))
+        {
+            voyage.VoyageId = "voy-" + Guid.NewGuid().ToString("n").Substring(0, 12).ToLower();
+        }
+
         if (string.IsNullOrEmpty(voyage.StatusId))
         {
             voyage.StatusId = "scheduled";
@@ -149,10 +158,10 @@ public class VoyageRepository : IVoyageRepository
         const string sql = @"
             INSERT INTO marine.voyages (
                 voyage_id, vessel_id, origin_id, destination_id, 
-                departure_date_time, eta, weight_util, deck_util, cabin_util, status_id, is_deleted
+                departure_date_time, eta, weight_util, deck_util, cabin_util, status_id, is_deleted, schedule_id
             ) VALUES (
                 @VoyageId, @VesselId, @OriginId, @DestinationId, 
-                @DepartureDateTime, @Eta, @WeightUtil, @DeckUtil, @CabinUtil, @StatusId, 0
+                @DepartureDateTime, @Eta, @WeightUtil, @DeckUtil, @CabinUtil, @StatusId, 0, @ScheduleId
             )";
         
         await connection.ExecuteAsync(sql, voyage);
@@ -230,7 +239,6 @@ public class VoyageRepository : IVoyageRepository
     {
         using var connection = _dbConnectionFactory.CreateConnection();
         
-        // Check voyage status first
         const string checkStatusSql = "SELECT status_id FROM marine.voyages WHERE voyage_id = @voyageId";
         var statusId = await connection.ExecuteScalarAsync<string>(checkStatusSql, new { voyageId });
         
@@ -266,7 +274,6 @@ public class VoyageRepository : IVoyageRepository
         }
         catch (Exception ex)
         {
-            // Log error but don't fail the assignment
             Console.WriteLine($"Failed to send notification emails: {ex.Message}");
         }
     }
@@ -306,39 +313,82 @@ public class VoyageRepository : IVoyageRepository
 
     public async Task RecalculateVoyageUtilizationAsync(string voyageId)
     {
+        var capacity = await GetVoyageCapacityDetailsAsync(voyageId);
+        if (capacity == null) return;
+
+        var items = await GetAssignedItemsForUtilizationAsync(voyageId);
+        var metrics = CalculateUtilizationMetrics(items);
+
+        // Calculate final percentages
+        double deadWeight = (double)(capacity.dead_weight ?? 1.0);
+        double deckArea = (double)(capacity.deck_area ?? 1.0);
+        int totalComplement = (int)(capacity.total_complement ?? 1);
+
+        double weightUtil = Math.Round(Math.Min(100, (metrics.TotalWeight / (deadWeight > 0 ? deadWeight : 1)) * 100), 1);
+        double deckUtil = Math.Round(Math.Min(100, (metrics.TotalArea / (deckArea > 0 ? deckArea : 1)) * 100), 1);
+        double cabinUtil = Math.Round(Math.Min(100, ((double)metrics.PersonnelCount / (totalComplement > 0 ? totalComplement : 1)) * 100), 1);
+
+        await UpdateVoyageUtilizationMetricsAsync(voyageId, weightUtil, deckUtil, cabinUtil);
+    }
+
+    private async Task<dynamic?> GetVoyageCapacityDetailsAsync(string voyageId)
+    {
         using var connection = _dbConnectionFactory.CreateConnection();
-        
-        // 1. Get Voyage and Vessel capacity details
-        const string voyageSql = @"
+        const string sql = @"
             SELECT v.vessel_id, ve.dead_weight, ve.deck_area, ve.total_complement
             FROM marine.voyages v
             JOIN marine.vessels ve ON v.vessel_id = ve.vessel_id
             WHERE v.voyage_id = @voyageId";
             
-        var cap = await connection.QueryFirstOrDefaultAsync(voyageSql, new { voyageId });
-        if (cap == null) return;
+        return await connection.QueryFirstOrDefaultAsync(sql, new { voyageId });
+    }
 
-        // 2. Get all items assigned to this voyage
-        const string itemsSql = @"
-            SELECT category_id, quantity, unit_of_measurement, dimensions, dimension_unit, weight, weight_unit
-            FROM marine.movement_request_items
-            WHERE assigned_voyage_id = @voyageId";
+    private async Task<IEnumerable<dynamic>> GetAssignedItemsForUtilizationAsync(string voyageId)
+    {
+        using var connection = _dbConnectionFactory.CreateConnection();
+        const string sql = @"
+            SELECT i.category_id, i.quantity, i.unit_of_measurement, i.dimensions, i.dimension_unit, i.weight, i.weight_unit, i.container_id,
+                   c.length as container_length, c.width as container_width, c.dimension_unit as container_dim_unit
+            FROM marine.movement_request_items i
+            LEFT JOIN logistics.predefined_containers c ON i.container_id = c.container_id
+            WHERE i.assigned_voyage_id = @voyageId";
             
-        var items = await connection.QueryAsync(itemsSql, new { voyageId });
+        return await connection.QueryAsync(sql, new { voyageId });
+    }
 
+    private (double TotalWeight, double TotalArea, int PersonnelCount) CalculateUtilizationMetrics(IEnumerable<dynamic> items)
+    {
         double totalWeight = 0;
         double totalArea = 0;
         int personnelCount = 0;
+        var processedContainers = new HashSet<string>();
 
         foreach (var item in items)
         {
-            // Weight calculation (standardized to MT)
-            double itemWeight = UnitConverter.ToMetricTonnes((double)(item.weight ?? 0), (string?)item.weight_unit);
-            totalWeight += itemWeight;
+            // Weight calculation
+            totalWeight += UnitConverter.ToMetricTonnes((double)(item.weight ?? 0), (string?)item.weight_unit);
 
             // Area calculation
-            double unitArea = UnitConverter.ToSquareMeters((string?)item.dimensions, (string?)item.dimension_unit);
-            totalArea += unitArea * (double)(item.quantity ?? 1);
+            string? containerId = (string?)item.container_id;
+            if (!string.IsNullOrEmpty(containerId))
+            {
+                if (processedContainers.Add(containerId))
+                {
+                    double length = (double)(item.container_length ?? 0);
+                    double width = (double)(item.container_width ?? 0);
+                    string? dimUnit = (string?)item.container_dim_unit;
+                    
+                    if (length > 0 && width > 0)
+                    {
+                        var containerDimensions = $"{length}x{width}";
+                        totalArea += UnitConverter.ToSquareMeters(containerDimensions, dimUnit);
+                    }
+                }
+            }
+            else
+            {
+                totalArea += UnitConverter.ToSquareMeters((string?)item.dimensions, (string?)item.dimension_unit) * (double)(item.quantity ?? 1);
+            }
         
             // Personnel calculation
             if ((string)item.category_id == "personnel")
@@ -347,23 +397,20 @@ public class VoyageRepository : IVoyageRepository
             }
         }
 
-        // 3. Calculate percentages
-        double deadWeight = (double)(cap.dead_weight ?? 1.0);
-        double deckArea = (double)(cap.deck_area ?? 1.0);
-        int totalComplement = (int)(cap.total_complement ?? 1);
+        return (totalWeight, totalArea, personnelCount);
+    }
 
-        double weightUtil = Math.Round(Math.Min(100, (totalWeight / (deadWeight > 0 ? deadWeight : 1)) * 100), 1);
-        double deckUtil = Math.Round(Math.Min(100, (totalArea / (deckArea > 0 ? deckArea : 1)) * 100), 1);
-        double cabinUtil = Math.Round(Math.Min(100, ((double)personnelCount / (totalComplement > 0 ? totalComplement : 1)) * 100), 1);
-
-        // 4. Update the voyage
-        const string updateSql = @"
+    private async Task UpdateVoyageUtilizationMetricsAsync(string voyageId, double weightUtil, double deckUtil, double cabinUtil)
+    {
+        using var connection = _dbConnectionFactory.CreateConnection();
+        const string sql = @"
             UPDATE marine.voyages 
             SET weight_util = @weightUtil, deck_util = @deckUtil, cabin_util = @cabinUtil
             WHERE voyage_id = @voyageId";
 
-        await connection.ExecuteAsync(updateSql, new { voyageId, weightUtil, deckUtil, cabinUtil });
+        await connection.ExecuteAsync(sql, new { voyageId, weightUtil, deckUtil, cabinUtil });
     }
+
 
     public async Task<IEnumerable<MovementRequest>> GetVoyageManifestAsync(string voyageId)
     {
@@ -375,8 +422,9 @@ public class VoyageRepository : IVoyageRepository
                    r.earliest_departure, r.latest_departure, r.earliest_arrival, r.latest_arrival, 
                    r.requested_by, r.urgency_id, r.is_hazardous, 
                    r.request_type_id, r.transportation_required, r.lifting, 
-                   r.business_unit as business_unit_id, r.cost_centre, r.comments, r.notify,
+                   r.business_unit_id, r.cost_centre, r.comments, r.notify,
                    u.urgency_label as Urgency,
+                   bu.unit_name as BusinessUnitName,
                    loc_o.location_name as OriginName, loc_d.location_name as DestinationName,
                    i.item_id, i.request_id, i.category_id, i.item_type_id, i.quantity, 
                    i.unit_of_measurement, i.description, i.dimensions, i.dimension_unit, 
@@ -386,6 +434,7 @@ public class VoyageRepository : IVoyageRepository
             JOIN marine.movement_request_items i ON r.request_id = i.request_id
             LEFT JOIN logistics.item_types it ON i.item_type_id = it.type_id
             LEFT JOIN logistics.urgencies u ON r.urgency_id = u.urgency_id
+            LEFT JOIN master.business_units bu ON r.business_unit_id = bu.unit_id
             LEFT JOIN logistics.locations loc_o ON r.origin_id = loc_o.location_id
             LEFT JOIN logistics.locations loc_d ON r.destination_id = loc_d.location_id
             WHERE i.assigned_voyage_id = @voyageId;";
@@ -418,13 +467,11 @@ public class VoyageRepository : IVoyageRepository
     
     private async Task SendAssignmentEmails(string voyageId, List<string> itemIds)
     {
-        using var connection = _dbConnectionFactory.CreateConnection();
-        
-        // 1. Get SMTP settings to check domain
         var smtpSettings = await _settingsRepository.GetSmtpSettingsAsync();
         if (!smtpSettings.Enabled) return;
 
-        // 2. Get Voyage details
+        using var connection = _dbConnectionFactory.CreateConnection();
+        
         const string voyageSql = @"
             SELECT v.voyage_id, ve.vessel_name, 
                    lo.location_name as origin_name, 
@@ -439,7 +486,6 @@ public class VoyageRepository : IVoyageRepository
         var voyage = await connection.QueryFirstOrDefaultAsync(voyageSql, new { voyageId });
         if (voyage == null) return;
 
-        // 3. Get Request details (group items by request to send fewer emails)
         const string requestsSql = @"
             SELECT DISTINCT r.request_id, r.requested_by, r.notify, 
                    r.origin_id, r.destination_id, 
@@ -453,37 +499,35 @@ public class VoyageRepository : IVoyageRepository
 
         foreach (var req in requests)
         {
-            var requestedBy = (string)req.requested_by;
-            var notify = (string)req.notify;
-            
-            // Construct To list
-            var toList = new List<string>();
-            
-            // Add domain to requested_by if needed
-            if (!string.IsNullOrEmpty(requestedBy))
-            {
-                if (!requestedBy.Contains("@") && !string.IsNullOrEmpty(smtpSettings.Domain))
-                {
-                    requestedBy = $"{requestedBy}@{smtpSettings.Domain}";
-                }
-                toList.Add(requestedBy);
-            }
+            await ProcessAssignmentEmailAsync(req, voyage, smtpSettings);
+        }
+    }
 
-            // Parse notify field (assuming comma or semicolon separated emails)
-            if (!string.IsNullOrEmpty(notify))
-            {
-                var notifyEmails = notify.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
-                                         .Select(e => e.Trim())
-                                         .Where(e => !string.IsNullOrEmpty(e));
-                toList.AddRange(notifyEmails);
-            }
+    private async Task ProcessAssignmentEmailAsync(dynamic req, dynamic voyage, SmtpSettings smtpSettings)
+    {
+        var notify = (string?)req.notify;
+        var notifyList = !string.IsNullOrEmpty(notify) 
+            ? notify.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries).ToList() 
+            : null;
 
-            if (!toList.Any()) continue;
+        var recipients = ResolveRecipients((string?)req.requested_by, notifyList, smtpSettings);
+        if (string.IsNullOrEmpty(recipients)) return;
 
-            var recipients = string.Join(";", toList.Distinct());
-            var subject = $"Klarity Notification: Items for Request {req.request_id} assigned to Voyage";
-            
-            var body = $@"
+        var template = await _notificationRepository.GetTemplateByIdAsync("voyage-assignment");
+        var subject = template?.Subject ?? $"Klarity Notification: Items for Request {req.request_id} assigned to Voyage";
+        var body = BuildAssignmentEmailBody(req, voyage, template?.BodyHtml);
+
+        // Replace placeholders in subject if any
+        subject = subject.Replace("{RequestId}", req.request_id);
+
+        await _emailService.SendEmailAsync(recipients, subject, body);
+    }
+
+    private string BuildAssignmentEmailBody(dynamic req, dynamic voyage, string? templateHtml)
+    {
+        if (string.IsNullOrEmpty(templateHtml))
+        {
+            return $@"
                 <h2>Items Assigned to Voyage</h2>
                 <p>Items from your movement request <strong>{req.request_id}</strong> have been scheduled on a voyage.</p>
                 <ul>
@@ -494,9 +538,15 @@ public class VoyageRepository : IVoyageRepository
                 </ul>
                 <p>Please log in to Klarity for full details.</p>
             ";
-
-            await _emailService.SendEmailAsync(recipients, subject, body);
         }
+
+        return templateHtml
+            .Replace("{RequestId}", req.request_id)
+            .Replace("{VesselName}", (string)voyage.vessel_name)
+            .Replace("{OriginName}", (string)voyage.origin_name)
+            .Replace("{DestinationName}", (string)voyage.destination_name)
+            .Replace("{DepartureTime}", ((DateTime)voyage.departure_date_time).ToString("dd MMM yyyy HH:mm"))
+            .Replace("{Urgency}", (string)req.urgency);
     }
 
     public async Task SendManifestOnDepartureBackgroundTask(string voyageId)
@@ -507,12 +557,10 @@ public class VoyageRepository : IVoyageRepository
         var pdfService = scope.ServiceProvider.GetRequiredService<Services.IPdfService>();
         var settingsRepo = scope.ServiceProvider.GetRequiredService<ISettingsRepository>();
         var emailService = scope.ServiceProvider.GetRequiredService<Services.IEmailService>();
+        var notificationRepo = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
         
         try 
         {
-            // 1. Get Full Voyage Details
-            // Note: We are calling 'this.GetVoyageByIdAsync' which uses _dbConnectionFactory.
-            // _dbConnectionFactory is Singleton, so it's safe to use from the background thread.
             var voyage = await GetVoyageByIdAsync(voyageId);
             if (voyage == null) 
             {
@@ -520,7 +568,6 @@ public class VoyageRepository : IVoyageRepository
                 return;
             }
             
-            // 2. Get Manifest Items
             var requests = await GetVoyageManifestAsync(voyageId);
             if (!requests.Any()) 
             {
@@ -528,12 +575,12 @@ public class VoyageRepository : IVoyageRepository
                 return;
             }
 
+            var template = await notificationRepo.GetTemplateByIdAsync("voyage-departure");
+
             _logger.LogInformation("Generating PDF for {VoyageId} with {Count} requests", voyageId, requests.Count());
             
-            // 3. Generate PDF (Using scoped service)
             var pdfBytes = pdfService.GenerateVoyageManifestPdf(voyage, requests);
             
-            // 4. Get SMTP settings (Using scoped repo)
             var smtpSettings = await settingsRepo.GetSmtpSettingsAsync();
             if (!smtpSettings.Enabled) 
             {
@@ -541,7 +588,6 @@ public class VoyageRepository : IVoyageRepository
                 return;
             }
 
-             // 5. Group items by Requester to send targeted emails
              var allItems = requests
                 .SelectMany(r => r.Items.Select(i => new { Request = r, Item = i }))
                 .Where(x => x.Item.AssignedVoyageId == voyageId)
@@ -555,73 +601,7 @@ public class VoyageRepository : IVoyageRepository
 
             foreach (var group in requesterGroups)
             {
-                var requestedBy = group.Key; 
-                if (string.IsNullOrEmpty(requestedBy)) continue;
-
-                var notifyEmails = group
-                    .SelectMany(x => x.Request.Notify ?? new List<string>())
-                    .Distinct()
-                    .ToList();
-                
-                var toList = new List<string>();
-                 if (!requestedBy.Contains("@") && !string.IsNullOrEmpty(smtpSettings.Domain))
-                {
-                    toList.Add($"{requestedBy}@{smtpSettings.Domain}");
-                }
-                else
-                {
-                     toList.Add(requestedBy);
-                }
-                toList.AddRange(notifyEmails);
-                
-                if (!toList.Any()) continue;
-
-                var recipients = string.Join(";", toList.Distinct());
-                _logger.LogInformation("Sending email to {Recipients}", recipients);
-
-                var subject = $"Voyage Departure Notification: {voyage.VesselName} - {voyage.VoyageId.ToUpper()}";
-                
-                var itemsTableHtml = @"
-                <table border='1' cellpadding='5' cellspacing='0' style='border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 14px;'>
-                    <thead>
-                        <tr style='background-color: #f2f2f2; text-align: left;'>
-                            <th style='padding: 8px;'>Item</th>
-                            <th style='padding: 8px;'>Quantity</th>
-                            <th style='padding: 8px;'>Unit</th>
-                            <th style='padding: 8px;'>Request ID</th>
-                        </tr>
-                    </thead>
-                    <tbody>";
-
-                foreach(var x in group)
-                {
-                    itemsTableHtml += $@"
-                        <tr>
-                            <td style='padding: 8px;'>{x.Item.ItemTypeName ?? x.Item.Description}</td>
-                            <td style='padding: 8px;'>{x.Item.Quantity}</td>
-                            <td style='padding: 8px;'>{x.Item.UnitOfMeasurement}</td>
-                            <td style='padding: 8px;'>{x.Request.RequestId}</td>
-                        </tr>";
-                }
-                itemsTableHtml += "</tbody></table>";
-
-                var body = $@"
-                    <h2>Voyage Departure Notification</h2>
-                    <p>The voyage <strong>{voyage.VoyageId.ToUpper()}</strong> has departed.</p>
-                    <p><strong>Vessel:</strong> {voyage.VesselName}</p>
-                    <p><strong>Route:</strong> {voyage.OriginName} to {voyage.DestinationName}</p>
-                    <p><strong>ETA:</strong> {voyage.Eta:dd MMM yyyy HH:mm}</p>
-                    <hr/>
-                    <h3>Your Scheduled Items:</h3>
-                    {itemsTableHtml}
-                    <p>The full voyage manifest is attached for your reference.</p>
-                ";
-                
-                var attachmentForEmail = new System.Net.Mail.Attachment(new MemoryStream(pdfBytes), $"Manifest_{voyage.VesselName}.pdf", "application/pdf");
-                
-                // Using scoped email service
-                await emailService.SendEmailWithAttachmentsAsync(recipients, subject, body, null, new List<System.Net.Mail.Attachment> { attachmentForEmail });
-                _logger.LogInformation("Email sent successfully to {Recipients}", recipients);
+                await ProcessDepartureEmailAsync(group, voyage, smtpSettings, pdfBytes, emailService, template);
             }
         }
         catch (Exception ex)
@@ -629,5 +609,120 @@ public class VoyageRepository : IVoyageRepository
             _logger.LogError(ex, "Failed to send manifest on departure");
         }
     }
+
+    private async Task ProcessDepartureEmailAsync(
+        IEnumerable<dynamic> group, 
+        Voyage voyage, 
+        SmtpSettings smtpSettings, 
+        byte[] pdfBytes, 
+        Services.IEmailService emailService,
+        NotificationTemplate? template)
+    {
+        var firstItem = group.First();
+        var requestedBy = (string)firstItem.Request.RequestedBy;
+        if (string.IsNullOrEmpty(requestedBy)) return;
+
+        var notifyEmails = group
+            .SelectMany(x => (List<string>)x.Request.Notify ?? new List<string>())
+            .Distinct()
+            .ToList();
+
+        var recipients = ResolveRecipients(requestedBy, notifyEmails, smtpSettings);
+        if (string.IsNullOrEmpty(recipients)) return;
+
+        _logger.LogInformation("Sending departure email to {Recipients}", recipients);
+
+        var subject = template?.Subject ?? $"Voyage Departure Notification: {voyage.VesselName} - {voyage.VoyageId.ToUpper()}";
+        subject = subject
+            .Replace("{VesselName}", voyage.VesselName)
+            .Replace("{VoyageId}", voyage.VoyageId.ToUpper());
+
+        var itemsTableHtml = BuildItemsTableHtml(group);
+        var body = BuildDepartureEmailBody(voyage, itemsTableHtml, template?.BodyHtml);
+
+        var attachment = new System.Net.Mail.Attachment(new MemoryStream(pdfBytes), $"Manifest_{voyage.VesselName}.pdf", "application/pdf");
+        await emailService.SendEmailWithAttachmentsAsync(recipients, subject, body, null, new List<System.Net.Mail.Attachment> { attachment });
+    }
+
+    private string BuildItemsTableHtml(IEnumerable<dynamic> items)
+    {
+        var html = @"
+            <table border='1' cellpadding='5' cellspacing='0' style='border-collapse: collapse; width: 100%; font-family: Arial, sans-serif; font-size: 14px;'>
+                <thead>
+                    <tr style='background-color: #f2f2f2; text-align: left;'>
+                        <th style='padding: 8px;'>Item</th>
+                        <th style='padding: 8px;'>Quantity</th>
+                        <th style='padding: 8px;'>Unit</th>
+                        <th style='padding: 8px;'>Request ID</th>
+                    </tr>
+                </thead>
+                <tbody>";
+
+        foreach (var x in items)
+        {
+            html += $@"
+                <tr>
+                    <td style='padding: 8px;'>{x.Item.ItemTypeName ?? x.Item.Description}</td>
+                    <td style='padding: 8px;'>{x.Item.Quantity}</td>
+                    <td style='padding: 8px;'>{x.Item.UnitOfMeasurement}</td>
+                    <td style='padding: 8px;'>{x.Request.RequestId}</td>
+                </tr>";
+        }
+
+        html += "</tbody></table>";
+        return html;
+    }
+
+    private string BuildDepartureEmailBody(Voyage voyage, string itemsTableHtml, string? templateHtml)
+    {
+        if (string.IsNullOrEmpty(templateHtml))
+        {
+            return $@"
+                <h2>Voyage Departure Notification</h2>
+                <p>The voyage <strong>{voyage.VoyageId.ToUpper()}</strong> has departed.</p>
+                <p><strong>Vessel:</strong> {voyage.VesselName}</p>
+                <p><strong>Route:</strong> {voyage.OriginName} to {voyage.DestinationName}</p>
+                <p><strong>ETA:</strong> {voyage.Eta:dd MMM yyyy HH:mm}</p>
+                <hr/>
+                <h3>Your Scheduled Items:</h3>
+                {itemsTableHtml}
+                <p>The full voyage manifest is attached for your reference.</p>
+            ";
+        }
+
+        return templateHtml
+            .Replace("{VoyageId}", voyage.VoyageId.ToUpper())
+            .Replace("{VesselName}", voyage.VesselName)
+            .Replace("{OriginName}", voyage.OriginName)
+            .Replace("{DestinationName}", voyage.DestinationName)
+            .Replace("{Eta}", voyage.Eta.ToString("dd MMM yyyy HH:mm"))
+            .Replace("{ItemsTable}", itemsTableHtml);
+    }
+
+    private string ResolveRecipients(string? requestedBy, List<string>? notify, SmtpSettings smtpSettings)
+    {
+        var toList = new List<string>();
+
+        if (!string.IsNullOrEmpty(requestedBy))
+        {
+            var email = requestedBy;
+            if (!email.Contains("@") && !string.IsNullOrEmpty(smtpSettings.Domain))
+            {
+                email = $"{email}@{smtpSettings.Domain}";
+            }
+            toList.Add(email);
+        }
+
+        if (notify != null && notify.Any())
+        {
+            var notifyEmails = notify
+                .Where(e => !string.IsNullOrEmpty(e))
+                .Select(e => e.Trim());
+            toList.AddRange(notifyEmails);
+        }
+
+        return string.Join(";", toList.Where(e => !string.IsNullOrEmpty(e)).Distinct());
+    }
+
 
 }

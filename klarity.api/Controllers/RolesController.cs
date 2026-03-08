@@ -14,16 +14,13 @@ namespace Klarity.Api.Controllers;
 public class RolesController : ControllerBase
 {
     private readonly IAdminRepository _adminRepository;
-    private readonly IAuditService _auditService;
     private readonly ILogger<RolesController> _logger;
 
     public RolesController(
         IAdminRepository adminRepository, 
-        IAuditService auditService, 
         ILogger<RolesController> logger)
     {
         _adminRepository = adminRepository;
-        _auditService = auditService;
         _logger = logger;
     }
 
@@ -50,6 +47,7 @@ public class RolesController : ControllerBase
     }
 
     [HttpPost]
+    [Audit("Create Role")]
     public async Task<ActionResult<Role>> CreateRole(CreateRoleDto dto)
     {
         var roleId = dto.RoleName.ToLower().Replace(" ", "-").Replace(".", "-");
@@ -66,25 +64,24 @@ public class RolesController : ControllerBase
         };
 
         await _adminRepository.CreateRoleAsync(role);
-        await _auditService.LogAsync(User.Identity?.Name ?? "system", "Create Role", true, "Roles", System.Text.Json.JsonSerializer.Serialize(role));
         return CreatedAtAction(nameof(GetRole), new { id = role.RoleId }, role);
     }
 
     [HttpPut("{id}")]
+    [Audit("Update Role")]
     public async Task<IActionResult> UpdateRole(string id, Role role)
     {
         if (id != role.RoleId) return BadRequest("Path ID and Role ID mismatch.");
         
         await _adminRepository.UpdateRoleAsync(role);
-        await _auditService.LogAsync(User.Identity?.Name ?? "system", "Update Role", true, "Roles", System.Text.Json.JsonSerializer.Serialize(role));
         return NoContent();
     }
 
     [HttpDelete("{id}")]
+    [Audit("Delete Role")]
     public async Task<IActionResult> DeleteRole(string id)
     {
         await _adminRepository.DeleteRoleAsync(id);
-        await _auditService.LogAsync(User.Identity?.Name ?? "system", "Delete Role", true, "Roles", id);
         return NoContent();
     }
 }

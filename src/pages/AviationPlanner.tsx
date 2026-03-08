@@ -145,9 +145,6 @@ export function AviationPlanner() {
 
     setIsLoading(true);
     try {
-      // NOTE: getFlightsByDateRange might need mode filter too?
-      // Currently it returns all. Let's filter client side or update API later.
-      // For now, I'll rely on the fact that we map flights to known helicopters.
       const flightsData = await getFlightsByDateRange(
         startDate.toISOString(),
         endDate.toISOString(),
@@ -190,7 +187,6 @@ export function AviationPlanner() {
       request.originId !== flight.originId &&
       request.originName !== flight.originName
     ) {
-      // Small allowance for comparing ID or Name since Flight might have labels
     }
 
     if (
@@ -204,8 +200,6 @@ export function AviationPlanner() {
     }
 
     // 1. Schedule Validation
-    // Flight Dep must be >= Request Earliest Dep
-    // Flight Arrival must be <= Request Latest Arrival
     const vDep = dayjs(flight.departureDateTime);
     const vArrival = dayjs(flight.arrivalDateTime);
     const rStart = dayjs(request.earliestDeparture);
@@ -231,7 +225,6 @@ export function AviationPlanner() {
       return;
     }
 
-    // Parse area from dimension string (e.g. "12m x 6m")
     const dimString = request.dimension || "0x0";
     const dimParts = dimString.toLowerCase().replace(/m/g, "").split("x");
     const reqArea =
@@ -263,12 +256,10 @@ export function AviationPlanner() {
     assignItemsToFlight(flightId, itemIds)
       .then(({ success }: { success: boolean }) => {
         if (success) {
-          // Remove from pending
           setPendingRequests((prev) =>
             prev.filter((r) => r.requestId !== requestId),
           );
 
-          // Trigger a refresh to get updated vessel/flight data (simpler than manual calculation for now)
           fetchData();
 
           toast.success(
@@ -296,10 +287,8 @@ export function AviationPlanner() {
 
         const newFlight = await createFlight(newFlightData as any);
 
-        // 2. Assign Items to New Flight
         await assignItemsToFlight(newFlight.flightId, rec.itemIds);
 
-        // Optimistic Update: Add flight to vessels
         setVessels((prev) =>
           prev.map((v) =>
             v.helicopterId === rec.vesselId
@@ -312,7 +301,6 @@ export function AviationPlanner() {
           `Created flight ${newFlight.flightId} and assigned items`,
         );
       } else if (rec.type === "AddToVoyage" && rec.targetVoyageId) {
-        // Assign Items to Existing Flight
         await assignItemsToFlight(rec.targetVoyageId, rec.itemIds);
         toast.success(`Assigned items to flight ${rec.targetVoyageId}`);
       }
@@ -392,7 +380,6 @@ export function AviationPlanner() {
     try {
       const candidates = await optimizeVoyagePlan();
 
-      // Map candidates to RecommendationSummary
       const recommendations: VoyageRecommendation[] = candidates.map(
         (cand, idx) => ({
           id: cand.voyageId || `rec-${idx}-${Date.now()}`,
@@ -451,7 +438,6 @@ export function AviationPlanner() {
 
   const navigate = useNavigate();
 
-  // Assuming we might have an aviation simulation page later
   const handleCompareScenarios = () => {
     navigate("/aviation/simulation");
   };

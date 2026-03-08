@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { LinearProgress } from "@mui/material";
 import dayjs, { Dayjs } from "dayjs";
-import { AviationHeader } from "../components/maritime/AviationHeader"; // Changed Header
+import { AviationHeader } from "../components/maritime/AviationHeader";
 import { getVessels } from "../services/maritime/vesselService";
 import { getAllRequests } from "../services/maritime/marineMovementService";
 import type { Vessel } from "../types/maritime/marine";
@@ -75,12 +75,12 @@ export function AviationDashboardPage() {
       setIsLoading(true);
       try {
         const [vesselsData, requestsData, buData] = await Promise.all([
-          getVessels("Helicopter"), // Filter for Helicopters
+          getVessels("Helicopter"),
           getAllRequests(
             startDate?.toISOString(),
             endDate?.toISOString(),
             "Aviation",
-          ), // Filter for Aviation
+          ),
           getBusinessUnits(),
         ]);
         setVessels(vesselsData);
@@ -118,7 +118,6 @@ export function AviationDashboardPage() {
       }
 
       req.items.forEach((item) => {
-        // Find assigned voyage status
         let voyageStatus = "-";
         let voyageStatusColor = "default";
         if (item.assignedVoyageId) {
@@ -134,7 +133,6 @@ export function AviationDashboardPage() {
           }
         }
 
-        // Filter by Vessel (Helicopter)
         const isAllVesselsSelected =
           vessels.length > 0 && selectedVesselIds.length === vessels.length;
 
@@ -275,20 +273,19 @@ export function AviationDashboardPage() {
         setStartDate={setStartDate}
         setEndDate={setEndDate}
         onApplyDateRange={handleApplyDateRange}
-        vessels={vessels} // Note: AviationHeader might need prop types update if it expects 'Helicopters' specifically but likely uses Vessel[]
+        vessels={vessels}
         selectedVesselIds={selectedVesselIds}
         setSelectedVesselIds={setSelectedVesselIds}
         routeFilters={routeFilters}
         setRouteFilters={setRouteFilters}
         hideActions={true}
         title="Aviation Dashboard"
-        onOptimize={() => {}} // Dummy needed for prop
-        onCompareScenarios={() => {}} // Dummy needed for prop
+        onOptimize={() => {}}
+        onCompareScenarios={() => {}}
       />
 
       {isLoading && <LinearProgress sx={{ height: 2 }} />}
 
-      {/* KPI Dashboard - Adapted for Aviation */}
       <Box
         sx={{
           px: 3,
@@ -694,13 +691,18 @@ export function AviationDashboardPage() {
                         <Chip
                           label={item.voyageStatus}
                           size="small"
+                          onClick={(e) => {
+                            if (item.voyageStatus === "Enroute") {
+                              e.stopPropagation();
+                            }
+                          }}
                           sx={{
                             bgcolor:
-                              item.voyageStatus === "In Transit"
+                              item.voyageStatus === "Enroute"
                                 ? "rgba(56, 189, 248, 0.1)"
                                 : "rgba(100, 116, 139, 0.1)",
                             color:
-                              item.voyageStatus === "In Transit"
+                              item.voyageStatus === "Enroute"
                                 ? "var(--accent)"
                                 : "var(--text-secondary)",
                             fontWeight: 600,

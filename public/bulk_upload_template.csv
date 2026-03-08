@@ -1,0 +1,6 @@
+Consignment Type,Item Type,Quantity,Unit of Measurement,Description,Dimensions,Volume Unit,Weight
+Cargo,Drill pipes,10,units,Drilling tools on pallets,120x100x150,cm3,5.5
+Consumables,Water,50,units,Drinking water cases,40x30x20,m3,0.5
+Equipment,Generators,2,units,Power generators,200x150x180,ft3,12.0
+Chemicals,Drums,15,units,Drilling fluids in 55gal drums,60x60x90,cm3,3.2
+Spare Parts,Crates,5,units,Engine spare parts,100x80x60,cm3,1.5

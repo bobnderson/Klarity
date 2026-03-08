@@ -16,4 +16,5 @@ export interface User {
   lastLogin: string;
   menus: MenuItemConfig[];
   jwt?: string;
+  mustChangePassword?: boolean;
 }

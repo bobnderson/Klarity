@@ -39,6 +39,7 @@ import {
   createRequest,
   updateRequest,
   deleteRequest,
+  searchRequests,
 } from "../services/maritime/marineMovementService";
 import type { User } from "../types/auth";
 import type { MovementRequest } from "../types/maritime/logistics";
@@ -56,6 +57,7 @@ export function MovementReqPage() {
     MovementRequest | undefined
   >(undefined);
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedRow, setSelectedRow] = useState<MovementRequest | null>(null);
@@ -73,6 +75,14 @@ export function MovementReqPage() {
     Array<{ origin: string | null; destination: string | null }>
   >([]);
 
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      setPage(0); // Reset to first page on new search
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
   const handleApplyDateRange = () => {
     fetchRequests();
   };
@@ -85,14 +95,23 @@ export function MovementReqPage() {
     if (user?.accountId) {
       setLoading(true);
       try {
-        const result = await getRequestsByAccountId(
-          user.accountId,
-          page + 1,
-          rowsPerPage,
-          "Marine",
-          startDate?.toISOString(),
-          endDate?.toISOString(),
-        );
+        let result;
+        if (debouncedSearchQuery) {
+          result = await searchRequests(
+            user.accountId,
+            debouncedSearchQuery,
+            "Marine",
+          );
+        } else {
+          result = await getRequestsByAccountId(
+            user.accountId,
+            page + 1,
+            rowsPerPage,
+            "Marine",
+            startDate?.toISOString(),
+            endDate?.toISOString(),
+          );
+        }
         setRequests(result.items || []);
         setTotalCount(result.totalCount || 0);
       } catch (error) {
@@ -105,7 +124,7 @@ export function MovementReqPage() {
 
   useEffect(() => {
     fetchRequests();
-  }, [user?.accountId, page, rowsPerPage]);
+  }, [user?.accountId, page, rowsPerPage, debouncedSearchQuery]);
 
   const handleCreateNew = () => {
     setEditingRequest(undefined);
@@ -260,7 +279,7 @@ export function MovementReqPage() {
       ) : (
         <>
           <RequestsHeader
-            title="Marine Requests"
+            title="Material Movement Requests"
             startDate={startDate}
             endDate={endDate}
             setStartDate={setStartDate}
@@ -297,428 +316,33 @@ export function MovementReqPage() {
               overflow: "hidden",
             }}
           >
-            {/* Search & Filter Bar */}
-            <Box
-              sx={{
-                display: "flex",
-                gap: 2,
-                p: 1.5,
-                bgcolor: "var(--panel)",
-                borderRadius: "12px",
-                border: "1px solid var(--border)",
-                alignItems: "center",
-                boxShadow:
-                  "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-                transition: "all 0.2s ease-in-out",
-                "&:hover": {
-                  borderColor: "rgba(255, 178, 0, 0.3)",
-                },
-              }}
-            >
-              <TextField
-                size="small"
-                placeholder="Search by Request ID..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{
-                  flex: 1,
-                  "& .MuiOutlinedInput-root": {
-                    bgcolor: "rgba(255,255,255,0.02)",
-                    borderRadius: "8px",
-                    "& fieldset": { borderColor: "transparent" },
-                    "&:hover fieldset": { borderColor: "transparent" },
-                    "&.Mui-focused fieldset": {
-                      borderColor: "var(--accent)",
-                      opacity: 0.5,
-                    },
-                  },
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start" sx={{ mr: 1.5 }}>
-                      <Search
-                        size={18}
-                        color="var(--accent)"
-                        style={{ opacity: 0.8 }}
-                      />
-                    </InputAdornment>
-                  ),
-                  endAdornment: searchQuery && (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        onClick={() => setSearchQuery("")}
-                        sx={{
-                          color: "var(--muted)",
-                          "&:hover": { color: "var(--danger)" },
-                        }}
-                      >
-                        <X size={14} />
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
+            <MovementReqFilterBar
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+              statusFilter={statusFilter}
+              onStatusChange={setStatusFilter}
+            />
 
-              <Box
-                sx={{
-                  width: "1px",
-                  height: "24px",
-                  bgcolor: "var(--border)",
-                  mx: 1,
-                }}
-              />
-
-              <TextField
-                select
-                size="small"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                sx={{
-                  width: 180,
-                  "& .MuiOutlinedInput-root": {
-                    bgcolor: "rgba(255,255,255,0.02)",
-                    borderRadius: "8px",
-                    "& fieldset": { borderColor: "transparent" },
-                    "&:hover fieldset": { borderColor: "transparent" },
-                    "&.Mui-focused fieldset": {
-                      borderColor: "var(--accent)",
-                      opacity: 0.5,
-                    },
-                  },
-                }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start" sx={{ mr: 1 }}>
-                      <Filter
-                        size={18}
-                        color="var(--accent)"
-                        style={{ opacity: 0.8 }}
-                      />
-                    </InputAdornment>
-                  ),
-                }}
-              >
-                <MuiMenuItem value="All" sx={{ fontSize: "0.875rem" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Typography variant="body2">All Statuses</Typography>
-                  </Box>
-                </MuiMenuItem>
-                <MuiMenuItem value="Draft" sx={{ fontSize: "0.875rem" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        w: 8,
-                        h: 8,
-                        borderRadius: "50%",
-                        bgcolor: "#3b82f6",
-                      }}
-                    />
-                    <Typography variant="body2">Draft</Typography>
-                  </Box>
-                </MuiMenuItem>
-                <MuiMenuItem value="Pending" sx={{ fontSize: "0.875rem" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        w: 8,
-                        h: 8,
-                        borderRadius: "50%",
-                        bgcolor: "#f59e0b",
-                      }}
-                    />
-                    <Typography variant="body2">Pending / Submitted</Typography>
-                  </Box>
-                </MuiMenuItem>
-                <MuiMenuItem value="Approved" sx={{ fontSize: "0.875rem" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        w: 8,
-                        h: 8,
-                        borderRadius: "50%",
-                        bgcolor: "#10b981",
-                      }}
-                    />
-                    <Typography variant="body2">Approved</Typography>
-                  </Box>
-                </MuiMenuItem>
-                <MuiMenuItem value="In-Transit" sx={{ fontSize: "0.875rem" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        w: 8,
-                        h: 8,
-                        borderRadius: "50%",
-                        bgcolor: "#3b82f6",
-                      }}
-                    />
-                    <Typography variant="body2">In-Transit</Typography>
-                  </Box>
-                </MuiMenuItem>
-                <MuiMenuItem value="Completed" sx={{ fontSize: "0.875rem" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        w: 8,
-                        h: 8,
-                        borderRadius: "50%",
-                        bgcolor: "#10b981",
-                      }}
-                    />
-                    <Typography variant="body2">Completed</Typography>
-                  </Box>
-                </MuiMenuItem>
-                <MuiMenuItem value="Rejected" sx={{ fontSize: "0.875rem" }}>
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                    <Box
-                      sx={{
-                        w: 8,
-                        h: 8,
-                        borderRadius: "50%",
-                        bgcolor: "#ef4444",
-                      }}
-                    />
-                    <Typography variant="body2">
-                      Rejected / Cancelled
-                    </Typography>
-                  </Box>
-                </MuiMenuItem>
-              </TextField>
-            </Box>
-
-            <TableContainer
-              component={Paper}
-              elevation={0}
-              sx={{
-                bgcolor: "var(--panel)",
-                border: "1px solid var(--border)",
-                borderRadius: 2,
-                flex: 1,
-                overflow: "auto",
-              }}
-            >
-              <Table stickyHeader>
-                <TableHead>
-                  <TableRow sx={{ bgcolor: "rgba(255,255,255,0.02)" }}>
-                    <TableCell
-                      sx={{
-                        color: "var(--text-secondary)",
-                        fontWeight: 700,
-                        py: 2,
-                      }}
-                    >
-                      Request ID
-                    </TableCell>
-                    <TableCell
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Route (Origin → Dest)
-                    </TableCell>
-                    <TableCell
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Planning Window
-                    </TableCell>
-                    <TableCell
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Status
-                    </TableCell>
-                    <TableCell
-                      align="right"
-                      sx={{
-                        color: "var(--text-secondary)",
-                        fontWeight: 700,
-                        pr: 4,
-                      }}
-                    >
-                      Items Summary
-                    </TableCell>
-                    <TableCell
-                      align="center"
-                      sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
-                    >
-                      Actions
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {filteredRequests.map((request) => {
-                    const totalWeight = (request.items || []).reduce(
-                      (sum, item) => sum + (item.weight || 0),
-                      0,
-                    );
-                    return (
-                      <TableRow
-                        key={request.requestId}
-                        hover
-                        sx={{
-                          "&:last-child td, &:last-child th": { border: 0 },
-                          "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
-                        }}
-                      >
-                        <TableCell
-                          sx={{ color: "var(--text)", fontWeight: 600 }}
-                        >
-                          {request.requestId}
-                        </TableCell>
-                        <TableCell sx={{ color: "var(--text)" }}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 1,
-                            }}
-                          >
-                            <Typography variant="body2">
-                              {request.originName || request.originId}
-                            </Typography>
-                            <Typography variant="caption" color="var(--muted)">
-                              →
-                            </Typography>
-                            <Typography variant="body2">
-                              {request.destinationName || request.destinationId}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Box>
-                            <Typography
-                              variant="caption"
-                              display="block"
-                              color="var(--text)"
-                            >
-                              Dep:{" "}
-                              {dayjs(request.earliestDeparture).format(
-                                "DD MMM · HH:mm",
-                              )}
-                            </Typography>
-                            <Typography variant="caption" color="var(--muted)">
-                              Arr:{" "}
-                              {dayjs(request.latestArrival).format(
-                                "DD MMM · HH:mm",
-                              )}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={
-                              getMovementRequestStatusStyle(request.status)
-                                .label
-                            }
-                            variant="outlined"
-                            size="small"
-                            color={
-                              getMovementRequestStatusStyle(request.status)
-                                .color as any
-                            }
-                            sx={{
-                              fontWeight: 600,
-                              fontSize: "0.65rem",
-                              height: 20,
-                              px: 0.5,
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell align="right" sx={{ pr: 4 }}>
-                          <Box>
-                            <Typography
-                              variant="body2"
-                              sx={{ color: "var(--text)", fontWeight: 600 }}
-                            >
-                              {totalWeight.toFixed(1)} t
-                            </Typography>
-                            <Typography variant="caption" color="var(--muted)">
-                              {request.items.length} Item(s)
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell align="center">
-                          <IconButton
-                            size="small"
-                            onClick={(e) => handleActionClick(e, request)}
-                            sx={{ color: "var(--muted)" }}
-                          >
-                            <MoreVertical size={18} />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                  {filteredRequests.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
-                        <Typography color="text.secondary" variant="body2">
-                          {searchQuery || statusFilter !== "All"
-                            ? "No results matching your filters."
-                            : "No Marine Requests found."}
-                        </Typography>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </TableContainer>
-
-            <TablePagination
-              rowsPerPageOptions={[10, 20, 50]}
-              component="div"
-              count={totalCount}
+            <MovementReqTable
+              requests={filteredRequests}
+              onActionClick={handleActionClick}
+              searchQuery={searchQuery}
+              statusFilter={statusFilter}
+              totalCount={totalCount}
               rowsPerPage={rowsPerPage}
               page={page}
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
-              sx={{
-                color: "var(--text-secondary)",
-                bgcolor: "var(--panel)",
-                borderTop: "1px solid var(--border)",
-                borderBottomLeftRadius: 8,
-                borderBottomRightRadius: 8,
-              }}
             />
           </Box>
 
-          <Menu
+          <MovementReqActionMenu
             anchorEl={anchorEl}
-            open={Boolean(anchorEl)}
+            selectedRow={selectedRow}
             onClose={handleActionClose}
-            PaperProps={{
-              sx: {
-                bgcolor: "var(--panel)",
-                border: "1px solid var(--border)",
-                minWidth: 160,
-              },
-            }}
-          >
-            <MuiMenuItem
-              onClick={() => {
-                if (selectedRow) handleEdit(selectedRow);
-                handleActionClose();
-              }}
-              sx={{ gap: 1.5, fontSize: "0.875rem" }}
-            >
-              <Edit2 size={16} color="var(--accent)" />
-              Edit Request
-            </MuiMenuItem>
-            <MuiMenuItem
-              onClick={handleActionClose}
-              sx={{ gap: 1.5, fontSize: "0.875rem" }}
-            >
-              <Copy size={16} color="var(--text-secondary)" />
-              Duplicate
-            </MuiMenuItem>
-            <MuiMenuItem
-              onClick={() => {
-                if (selectedRow) handleDelete(selectedRow);
-              }}
-              sx={{ gap: 1.5, fontSize: "0.875rem", color: "var(--danger)" }}
-            >
-              <Trash2 size={16} />
-              Delete
-            </MuiMenuItem>
-          </Menu>
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
         </>
       )}
 
@@ -731,3 +355,458 @@ export function MovementReqPage() {
     </Box>
   );
 }
+
+// --- Sub-components ---
+
+interface MovementReqFilterBarProps {
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  statusFilter: string;
+  onStatusChange: (status: string) => void;
+}
+
+const MovementReqFilterBar = ({
+  searchQuery,
+  onSearchChange,
+  statusFilter,
+  onStatusChange,
+}: MovementReqFilterBarProps) => (
+  <Box
+    sx={{
+      display: "flex",
+      gap: 2,
+      p: 1.5,
+      bgcolor: "var(--panel)",
+      borderRadius: "12px",
+      border: "1px solid var(--border)",
+      alignItems: "center",
+      boxShadow:
+        "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+      transition: "all 0.2s ease-in-out",
+      "&:hover": {
+        borderColor: "rgba(255, 178, 0, 0.3)",
+      },
+    }}
+  >
+    <TextField
+      size="small"
+      placeholder="Search by Request ID..."
+      value={searchQuery}
+      onChange={(e) => onSearchChange(e.target.value)}
+      sx={{
+        flex: 1,
+        "& .MuiOutlinedInput-root": {
+          bgcolor: "rgba(255,255,255,0.02)",
+          borderRadius: "8px",
+          "& fieldset": { borderColor: "transparent" },
+          "&:hover fieldset": { borderColor: "transparent" },
+          "&.Mui-focused fieldset": {
+            borderColor: "var(--accent)",
+            opacity: 0.5,
+          },
+        },
+      }}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start" sx={{ mr: 1.5 }}>
+            <Search size={18} color="var(--accent)" style={{ opacity: 0.8 }} />
+          </InputAdornment>
+        ),
+        endAdornment: searchQuery && (
+          <InputAdornment position="end">
+            <IconButton
+              size="small"
+              onClick={() => onSearchChange("")}
+              sx={{
+                color: "var(--muted)",
+                "&:hover": { color: "var(--danger)" },
+              }}
+            >
+              <X size={14} />
+            </IconButton>
+          </InputAdornment>
+        ),
+      }}
+    />
+
+    <Box
+      sx={{
+        width: "1px",
+        height: "24px",
+        bgcolor: "var(--border)",
+        mx: 1,
+      }}
+    />
+
+    <TextField
+      select
+      size="small"
+      value={statusFilter}
+      onChange={(e) => onStatusChange(e.target.value)}
+      sx={{
+        width: 180,
+        "& .MuiOutlinedInput-root": {
+          bgcolor: "rgba(255,255,255,0.02)",
+          borderRadius: "8px",
+          "& fieldset": { borderColor: "transparent" },
+          "&:hover fieldset": { borderColor: "transparent" },
+          "&.Mui-focused fieldset": {
+            borderColor: "var(--accent)",
+            opacity: 0.5,
+          },
+        },
+      }}
+      InputProps={{
+        startAdornment: (
+          <InputAdornment position="start" sx={{ mr: 1 }}>
+            <Filter size={18} color="var(--accent)" style={{ opacity: 0.8 }} />
+          </InputAdornment>
+        ),
+      }}
+    >
+      <MuiMenuItem value="All" sx={{ fontSize: "0.875rem" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Typography variant="body2">All Statuses</Typography>
+        </Box>
+      </MuiMenuItem>
+      <MuiMenuItem value="Draft" sx={{ fontSize: "0.875rem" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              bgcolor: "#3b82f6",
+            }}
+          />
+          <Typography variant="body2">Draft</Typography>
+        </Box>
+      </MuiMenuItem>
+      <MuiMenuItem value="Pending" sx={{ fontSize: "0.875rem" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              bgcolor: "#f59e0b",
+            }}
+          />
+          <Typography variant="body2">Pending / Submitted</Typography>
+        </Box>
+      </MuiMenuItem>
+      <MuiMenuItem value="Approved" sx={{ fontSize: "0.875rem" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              bgcolor: "#10b981",
+            }}
+          />
+          <Typography variant="body2">Approved</Typography>
+        </Box>
+      </MuiMenuItem>
+      <MuiMenuItem value="In-Transit" sx={{ fontSize: "0.875rem" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              bgcolor: "#3b82f6",
+            }}
+          />
+          <Typography variant="body2">In-Transit</Typography>
+        </Box>
+      </MuiMenuItem>
+      <MuiMenuItem value="Completed" sx={{ fontSize: "0.875rem" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              bgcolor: "#10b981",
+            }}
+          />
+          <Typography variant="body2">Completed</Typography>
+        </Box>
+      </MuiMenuItem>
+      <MuiMenuItem value="Rejected" sx={{ fontSize: "0.875rem" }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box
+            sx={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              bgcolor: "#ef4444",
+            }}
+          />
+          <Typography variant="body2">Rejected / Cancelled</Typography>
+        </Box>
+      </MuiMenuItem>
+    </TextField>
+  </Box>
+);
+
+interface MovementReqTableProps {
+  requests: MovementRequest[];
+  onActionClick: (
+    event: React.MouseEvent<HTMLElement>,
+    row: MovementRequest,
+  ) => void;
+  searchQuery: string;
+  statusFilter: string;
+  totalCount: number;
+  rowsPerPage: number;
+  page: number;
+  onPageChange: (_: unknown, newPage: number) => void;
+  onRowsPerPageChange: (event: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+const MovementReqTable = ({
+  requests,
+  onActionClick,
+  searchQuery,
+  statusFilter,
+  totalCount,
+  rowsPerPage,
+  page,
+  onPageChange,
+  onRowsPerPageChange,
+}: MovementReqTableProps) => (
+  <>
+    <TableContainer
+      component={Paper}
+      elevation={0}
+      sx={{
+        bgcolor: "var(--panel)",
+        border: "1px solid var(--border)",
+        borderRadius: 2,
+        flex: 1,
+        overflow: "auto",
+      }}
+    >
+      <Table stickyHeader>
+        <TableHead>
+          <TableRow sx={{ bgcolor: "rgba(255,255,255,0.02)" }}>
+            <TableCell
+              sx={{
+                color: "var(--text-secondary)",
+                fontWeight: 700,
+                py: 2,
+              }}
+            >
+              Request ID
+            </TableCell>
+            <TableCell sx={{ color: "var(--text-secondary)", fontWeight: 700 }}>
+              Route (Origin → Dest)
+            </TableCell>
+            <TableCell sx={{ color: "var(--text-secondary)", fontWeight: 700 }}>
+              Planning Window
+            </TableCell>
+            <TableCell sx={{ color: "var(--text-secondary)", fontWeight: 700 }}>
+              Status
+            </TableCell>
+            <TableCell
+              align="right"
+              sx={{
+                color: "var(--text-secondary)",
+                fontWeight: 700,
+                pr: 4,
+              }}
+            >
+              Items Summary
+            </TableCell>
+            <TableCell
+              align="center"
+              sx={{ color: "var(--text-secondary)", fontWeight: 700 }}
+            >
+              Actions
+            </TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {requests.map((request) => {
+            const totalWeight = (request.items || []).reduce(
+              (sum, item) => sum + (item.weight || 0),
+              0,
+            );
+            return (
+              <TableRow
+                key={request.requestId}
+                hover
+                sx={{
+                  "&:last-child td, &:last-child th": { border: 0 },
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.02)" },
+                }}
+              >
+                <TableCell sx={{ color: "var(--text)", fontWeight: 600 }}>
+                  {request.requestId}
+                </TableCell>
+                <TableCell sx={{ color: "var(--text)" }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="body2">
+                      {request.originName || request.originId}
+                    </Typography>
+                    <Typography variant="caption" color="var(--muted)">
+                      →
+                    </Typography>
+                    <Typography variant="body2">
+                      {request.destinationName || request.destinationId}
+                    </Typography>
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Box>
+                    <Typography
+                      variant="caption"
+                      display="block"
+                      color="var(--text)"
+                    >
+                      Dep:{" "}
+                      {dayjs(request.earliestDeparture).format(
+                        "DD MMM · HH:mm",
+                      )}
+                    </Typography>
+                    <Typography variant="caption" color="var(--muted)">
+                      Arr:{" "}
+                      {dayjs(request.latestArrival).format("DD MMM · HH:mm")}
+                    </Typography>
+                  </Box>
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={getMovementRequestStatusStyle(request.status).label}
+                    variant="outlined"
+                    size="small"
+                    color={
+                      getMovementRequestStatusStyle(request.status).color as any
+                    }
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: "0.65rem",
+                      height: 20,
+                      px: 0.5,
+                    }}
+                  />
+                </TableCell>
+                <TableCell align="right" sx={{ pr: 4 }}>
+                  <Box>
+                    <Typography
+                      variant="body2"
+                      sx={{ color: "var(--text)", fontWeight: 600 }}
+                    >
+                      {totalWeight.toFixed(1)} t
+                    </Typography>
+                    <Typography variant="caption" color="var(--muted)">
+                      {request.items.length} Item(s)
+                    </Typography>
+                  </Box>
+                </TableCell>
+                <TableCell align="center">
+                  <IconButton
+                    size="small"
+                    onClick={(e) => onActionClick(e, request)}
+                    sx={{ color: "var(--muted)" }}
+                  >
+                    <MoreVertical size={18} />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            );
+          })}
+          {requests.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={6} align="center" sx={{ py: 8 }}>
+                <Typography color="text.secondary" variant="body2">
+                  {searchQuery || statusFilter !== "All"
+                    ? "No results matching your filters."
+                    : "No Marine Requests found."}
+                </Typography>
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
+    </TableContainer>
+
+    <TablePagination
+      rowsPerPageOptions={[10, 20, 50]}
+      component="div"
+      count={totalCount}
+      rowsPerPage={rowsPerPage}
+      page={page}
+      onPageChange={onPageChange}
+      onRowsPerPageChange={onRowsPerPageChange}
+      sx={{
+        color: "var(--text-secondary)",
+        bgcolor: "var(--panel)",
+        borderTop: "1px solid var(--border)",
+        borderBottomLeftRadius: 8,
+        borderBottomRightRadius: 8,
+      }}
+    />
+  </>
+);
+
+interface MovementReqActionMenuProps {
+  anchorEl: HTMLElement | null;
+  selectedRow: MovementRequest | null;
+  onClose: () => void;
+  onEdit: (row: MovementRequest) => void;
+  onDelete: (row: MovementRequest) => void;
+}
+
+const MovementReqActionMenu = ({
+  anchorEl,
+  selectedRow,
+  onClose,
+  onEdit,
+  onDelete,
+}: MovementReqActionMenuProps) => (
+  <Menu
+    anchorEl={anchorEl}
+    open={Boolean(anchorEl)}
+    onClose={onClose}
+    PaperProps={{
+      sx: {
+        bgcolor: "var(--panel)",
+        border: "1px solid var(--border)",
+        minWidth: 160,
+      },
+    }}
+  >
+    <MuiMenuItem
+      onClick={() => {
+        if (selectedRow) onEdit(selectedRow);
+        onClose();
+      }}
+      sx={{ gap: 1.5, fontSize: "0.875rem" }}
+    >
+      <Edit2 size={16} color="var(--accent)" />
+      Edit Request
+    </MuiMenuItem>
+    <MuiMenuItem onClick={onClose} sx={{ gap: 1.5, fontSize: "0.875rem" }}>
+      <Copy size={16} color="var(--text-secondary)" />
+      Duplicate
+    </MuiMenuItem>
+    <MuiMenuItem
+      onClick={() => {
+        if (selectedRow) onDelete(selectedRow);
+      }}
+      sx={{ gap: 1.5, fontSize: "0.875rem", color: "var(--danger)" }}
+    >
+      <Trash2 size={16} />
+      Delete
+    </MuiMenuItem>
+  </Menu>
+);

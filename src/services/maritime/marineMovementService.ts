@@ -30,6 +30,20 @@ export const marineMovementService = {
     return response.data;
   },
 
+  async searchMovementRequests(
+    accountId: string,
+    query: string,
+    mode: "Marine" | "Aviation" = "Marine",
+  ): Promise<{ items: MovementRequest[]; totalCount: number }> {
+    const response = await api.get<{
+      items: MovementRequest[];
+      totalCount: number;
+    }>(`MovementRequests/account/${accountId}/search`, {
+      params: { query, mode },
+    });
+    return response.data;
+  },
+
   async getMovementRequestById(requestId: string): Promise<MovementRequest> {
     const response = await api.get<MovementRequest>(
       `MovementRequests/${requestId}`,
@@ -80,11 +94,48 @@ export const marineMovementService = {
     );
     return response.data;
   },
+  async getPendingApprovals(
+    mode: "Marine" | "Aviation" = "Marine",
+  ): Promise<MovementRequest[]> {
+    const response = await api.get<MovementRequest[]>(
+      "MovementRequests/pending-approval",
+      {
+        params: { mode },
+      },
+    );
+    return response.data;
+  },
+
+  async getApproverMapping(): Promise<any[]> {
+    const response = await api.get<any[]>("MovementRequests/approvers/mapping");
+    return response.data;
+  },
+
+  async downloadManifest(
+    requestId: string,
+    mode: "Marine" | "Aviation" = "Marine",
+  ): Promise<void> {
+    const response = await api.get(
+      `MovementRequests/${requestId}/manifest/download`,
+      {
+        params: { mode },
+        responseType: "blob",
+      },
+    );
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", `Manifest_${requestId}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  },
 };
 
 export const getAllRequests = marineMovementService.getMovementRequests;
 export const getRequestsByAccountId =
   marineMovementService.getUnscheduledMovementRequests;
+export const searchRequests = marineMovementService.searchMovementRequests;
 export const createRequest = marineMovementService.createMovementRequest;
 export const updateRequest = marineMovementService.updateMovementRequest;
 export const deleteRequest = marineMovementService.deleteMovementRequest;
@@ -92,3 +143,6 @@ export const getMovementRequestById =
   marineMovementService.getMovementRequestById;
 export const getPendingRequests =
   marineMovementService.getPendingMovementRequests;
+export const getPendingApprovals = marineMovementService.getPendingApprovals;
+export const getApproverMapping = marineMovementService.getApproverMapping;
+export const downloadManifest = marineMovementService.downloadManifest;

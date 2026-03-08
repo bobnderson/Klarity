@@ -59,11 +59,6 @@ export function RequestsHeader({
       </Box>
 
       <Box className="top-nav-right">
-        <span className="badge-custom">
-          <span className="badge-dot"></span>
-          Live Plan · Stable
-        </span>
-
         {onRefresh && (
           <Tooltip title="Refresh Data">
             <IconButton

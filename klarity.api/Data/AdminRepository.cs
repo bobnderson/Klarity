@@ -11,6 +11,7 @@ public interface IAdminRepository
     Task<User?> GetUserByIdAsync(string accountId);
     Task CreateUserAsync(User user);
     Task UpdateUserAsync(User user);
+    Task UpdatePasswordHashAsync(string accountId, string passwordHash);
     Task DeleteUserAsync(string accountId);
 
     // Role CRUD
@@ -37,7 +38,7 @@ public class AdminRepository : IAdminRepository
     {
         using var connection = _dbConnectionFactory.CreateConnection();
         const string sql = @"
-            SELECT account_id, account_name, last_login, is_active 
+            SELECT account_id, account_name, email, last_login, is_active, is_external, password_hash, must_change_password 
             FROM auth.users;
             
             SELECT account_id AS AccountId, role_id AS RoleId 
@@ -62,7 +63,7 @@ public class AdminRepository : IAdminRepository
     {
         using var connection = _dbConnectionFactory.CreateConnection();
         const string sql = @"
-            SELECT account_id, account_name, last_login, is_active 
+            SELECT account_id, account_name, email, last_login, is_active, is_external, password_hash, must_change_password 
             FROM auth.users WHERE account_id = @accountId;
 
             SELECT role_id FROM auth.user_roles WHERE account_id = @accountId;";
@@ -84,8 +85,8 @@ public class AdminRepository : IAdminRepository
         try
         {
             const string userSql = @"
-                INSERT INTO auth.users (account_id, account_name, is_active) 
-                VALUES (@AccountId, @AccountName, @IsActive);";
+                INSERT INTO auth.users (account_id, account_name, email, is_active, is_external, password_hash, must_change_password) 
+                VALUES (@AccountId, @AccountName, @Email, @IsActive, @IsExternal, @PasswordHash, @MustChangePassword);";
             await connection.ExecuteAsync(userSql, user, transaction);
 
             if (user.RoleIds.Any())
@@ -112,7 +113,8 @@ public class AdminRepository : IAdminRepository
         {
             const string userSql = @"
                 UPDATE auth.users 
-                SET account_name = @AccountName, is_active = @IsActive 
+                SET account_name = @AccountName, email = @Email, is_active = @IsActive, is_external = @IsExternal, 
+                    password_hash = @PasswordHash, must_change_password = @MustChangePassword 
                 WHERE account_id = @AccountId;";
             await connection.ExecuteAsync(userSql, user, transaction);
 
@@ -131,6 +133,13 @@ public class AdminRepository : IAdminRepository
             transaction.Rollback();
             throw;
         }
+    }
+
+    public async Task UpdatePasswordHashAsync(string accountId, string passwordHash)
+    {
+        using var connection = _dbConnectionFactory.CreateConnection();
+        const string sql = "UPDATE auth.users SET password_hash = @passwordHash, must_change_password = 0 WHERE account_id = @accountId;";
+        await connection.ExecuteAsync(sql, new { accountId, passwordHash });
     }
 
     public async Task DeleteUserAsync(string accountId)

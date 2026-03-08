@@ -7,23 +7,24 @@ import { HeaderVessels } from "./header/HeaderVessels";
 import type { Vessel } from "../../types/maritime/marine";
 
 interface MarineHeaderProps {
-  startDate: Dayjs | null;
-  endDate: Dayjs | null;
-  setStartDate: (date: Dayjs | null) => void;
-  setEndDate: (date: Dayjs | null) => void;
-  onApplyDateRange: () => void;
-  vessels: Vessel[];
-  selectedVesselIds: string[];
-  setSelectedVesselIds: (ids: string[]) => void;
-  routeFilters: Array<{ origin: string | null; destination: string | null }>;
-  setRouteFilters: (
+  startDate?: Dayjs | null;
+  endDate?: Dayjs | null;
+  setStartDate?: (date: Dayjs | null) => void;
+  setEndDate?: (date: Dayjs | null) => void;
+  onApplyDateRange?: () => void;
+  vessels?: Vessel[];
+  selectedVesselIds?: string[];
+  setSelectedVesselIds?: (ids: string[]) => void;
+  routeFilters?: Array<{ origin: string | null; destination: string | null }>;
+  setRouteFilters?: (
     filters: Array<{ origin: string | null; destination: string | null }>,
   ) => void;
-  onOptimize: () => void;
-  onCompareScenarios: () => void;
+  onOptimize?: () => void;
+  onCompareScenarios?: () => void;
   onRefresh?: () => void;
   title?: string;
   hideActions?: boolean;
+  showFilters?: boolean;
 }
 
 export function MarineHeader({
@@ -42,6 +43,7 @@ export function MarineHeader({
   onRefresh,
   title = "Marine Planner",
   hideActions = false,
+  showFilters = true,
 }: MarineHeaderProps) {
   return (
     <Box component="header" className="top-nav" sx={{ mx: 1.25, mt: 1.25 }}>
@@ -57,35 +59,29 @@ export function MarineHeader({
           </Typography>
         </Box>
 
-        <HeaderHorizon
-          startDate={startDate}
-          endDate={endDate}
-          setStartDate={setStartDate}
-          setEndDate={setEndDate}
-          onApplyDateRange={onApplyDateRange}
-        />
-        <HeaderRoutes
-          routeFilters={routeFilters}
-          setRouteFilters={setRouteFilters}
-        />
-        <HeaderVessels
-          vessels={vessels}
-          selectedVesselIds={selectedVesselIds}
-          setSelectedVesselIds={setSelectedVesselIds}
-        />
-
-        {/* <Box className="toggle-custom">
-          <span className="chip-label">Simulation</span>
-          <strong>Off</strong>
-        </Box> */}
+        {showFilters && (
+          <>
+            <HeaderHorizon
+              startDate={startDate || null}
+              endDate={endDate || null}
+              setStartDate={setStartDate || (() => {})}
+              setEndDate={setEndDate || (() => {})}
+              onApplyDateRange={onApplyDateRange || (() => {})}
+            />
+            <HeaderRoutes
+              routeFilters={routeFilters || []}
+              setRouteFilters={setRouteFilters || (() => {})}
+            />
+            <HeaderVessels
+              vessels={vessels || []}
+              selectedVesselIds={selectedVesselIds || []}
+              setSelectedVesselIds={setSelectedVesselIds || (() => {})}
+            />
+          </>
+        )}
       </Box>
 
       <Box className="top-nav-right">
-        <span className="badge-custom">
-          <span className="badge-dot"></span>
-          Live Plan · Stable
-        </span>
-
         {onRefresh && (
           <Tooltip title="Refresh Data">
             <IconButton
@@ -102,7 +98,6 @@ export function MarineHeader({
           </Tooltip>
         )}
 
-        {/* <button className="btn-ghost-custom">Save Version</button> */}
         {!hideActions && (
           <>
             <button className="btn-ghost-custom" onClick={onCompareScenarios}>
@@ -113,11 +108,6 @@ export function MarineHeader({
             </button>
           </>
         )}
-
-        {/* <Box className="notif-btn">
-          <Bell size={14} />
-          <span className="notif-dot"></span>
-        </Box> */}
       </Box>
     </Box>
   );

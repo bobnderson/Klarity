@@ -21,6 +21,7 @@ export interface Voyage {
   voyageId: string;
   vesselId: string;
   vesselName: string;
+  scheduleId?: string;
   originId: string;
   originName?: string;
   destinationId: string;
@@ -57,6 +58,22 @@ export interface NewVoyage {
   departureDateTime: string;
   eta: string;
   stops?: VoyageStop[];
+}
+
+export interface VoyageSchedule {
+  scheduleId?: string;
+  vesselId: string;
+  originId: string;
+  destinationId: string;
+  departureTime: string; // TimeSpan from backend as string "HH:mm:ss"
+  durationDays: number;
+  frequency: string;
+  daysOfWeek?: string;
+  dayOfMonth?: number;
+  isActive: boolean;
+  vesselName?: string;
+  originName?: string;
+  destinationName?: string;
 }
 
 export interface Vessel {

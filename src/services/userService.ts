@@ -3,8 +3,12 @@ import api from "./api";
 export interface User {
   accountId: string;
   accountName: string;
+  email?: string;
   lastLogin?: string;
   isActive: boolean;
+  isExternal?: boolean;
+  password?: string;
+  mustChangePassword?: boolean;
   roleIds: string[];
 }
 

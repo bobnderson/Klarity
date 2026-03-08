@@ -2,16 +2,21 @@ import api from "./api";
 import type { User } from "../types/auth";
 
 export const login = async (
-  email?: string,
+  username?: string,
   password?: string,
 ): Promise<{ data: User; status: number }> => {
-  // Clear any existing session at the start
   sessionStorage.removeItem("user_data");
   sessionStorage.removeItem("auth_token");
 
-  const response = await api.get<User>("auth/login", {
-    params: email ? { email, password } : {},
-  });
+  let response;
+  if (username && password) {
+    response = await api.post<User>("auth/login/external", {
+      username,
+      password,
+    });
+  } else {
+    response = await api.get<User>("auth/login");
+  }
 
   if (response.status === 200 && response.data) {
     if (response.data.jwt) {
@@ -21,6 +26,17 @@ export const login = async (
   }
 
   return { data: response.data, status: response.status };
+};
+
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ message: string }> => {
+  const response = await api.post("auth/change-password", {
+    currentPassword,
+    newPassword,
+  });
+  return response.data;
 };
 
 export const logout = (): void => {

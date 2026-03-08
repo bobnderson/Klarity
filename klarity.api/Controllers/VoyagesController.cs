@@ -19,7 +19,7 @@ public class VoyagesController : ControllerBase
     private readonly IMovementRequestRepository _requestRepository;
     private readonly ILocationRepository _locationRepository;
     private readonly IVoyageOptimizerService _optimizerService;
-    private readonly IAuditService _auditService;
+    private readonly IManifestExportService _manifestExportService;
 
     public VoyagesController(
         IVoyageRepository repository, 
@@ -27,14 +27,14 @@ public class VoyagesController : ControllerBase
         IMovementRequestRepository requestRepository,
         ILocationRepository locationRepository,
         IVoyageOptimizerService optimizerService,
-        IAuditService auditService)
+        IManifestExportService manifestExportService)
     {
         _repository = repository;
         _vesselRepository = vesselRepository;
         _requestRepository = requestRepository;
         _locationRepository = locationRepository;
         _optimizerService = optimizerService;
-        _auditService = auditService;
+        _manifestExportService = manifestExportService;
     }
 
     [HttpGet("statuses")]
@@ -75,58 +75,29 @@ public class VoyagesController : ControllerBase
 
     [HttpPost]
     [ValidateModel]
+    [Audit("Create Voyage")]
     public async Task<ActionResult<Voyage>> CreateVoyage(Voyage voyage)
     {
-        if (string.IsNullOrEmpty(voyage.VoyageId))
-        {
-            voyage.VoyageId = "voy-" + Guid.NewGuid().ToString("n").Substring(0, 8);
-        }
-
         await _repository.CreateVoyageAsync(voyage);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Create Voyage",
-            true,
-            "Voyages",
-            System.Text.Json.JsonSerializer.Serialize(voyage)
-        );
-
         return CreatedAtAction(nameof(GetVoyage), new { id = voyage.VoyageId }, voyage);
     }
 
     [HttpPut("{id}")]
     [ValidateModel]
+    [Audit("Update Voyage")]
     public async Task<IActionResult> UpdateVoyage(string id, Voyage voyage)
     {
         if (id != voyage.VoyageId) return BadRequest("ID mismatch");
 
         await _repository.UpdateVoyageAsync(voyage);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Update Voyage",
-            true,
-            "Voyages",
-            System.Text.Json.JsonSerializer.Serialize(voyage)
-        );
-
         return Ok(voyage);
     }
 
     [HttpDelete("{id}")]
+    [Audit("Delete Voyage")]
     public async Task<IActionResult> DeleteVoyage(string id)
     {
         await _repository.DeleteVoyageAsync(id);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Delete Voyage",
-            true,
-            "Voyages",
-            $"Voyage deleted: {id}"
-        );
-
         return NoContent();
     }
 
@@ -137,39 +108,57 @@ public class VoyagesController : ControllerBase
         return Ok(manifest);
     }
 
+    [HttpGet("{id}/manifest/download")]
+    public async Task<IActionResult> DownloadManifest(string id)
+    {
+        try
+        {
+            var voyage = await _repository.GetVoyageByIdAsync(id);
+            if (voyage == null) return NotFound("Voyage not found");
+
+            var vessel = await _vesselRepository.GetVesselByIdAsync(voyage.VesselId);
+            var manifest = await _repository.GetVoyageManifestAsync(id);
+
+            var pdfBytes = _manifestExportService.GenerateManifestPdf(new ManifestExportData
+            {
+                Identifier = voyage.VoyageId,
+                VesselName = vessel?.VesselName ?? voyage.VesselId,
+                Route = $"{voyage.OriginName ?? voyage.OriginId} to {voyage.DestinationName ?? voyage.DestinationId}",
+                Departure = voyage.DepartureDateTime.ToString("dd MMM yyyy HH:mm"),
+                Arrival = voyage.Eta.ToString("dd MMM yyyy HH:mm"),
+                WeightUtil = voyage.WeightUtil,
+                DeckUtil = voyage.DeckUtil,
+                Manifest = manifest,
+                IsAviation = false,
+                Status = voyage.StatusId ?? "scheduled"
+            });
+
+            return File(pdfBytes, "application/pdf", $"Manifest_{vessel?.VesselName ?? "Vessel"}_{id}.pdf");
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Error generating PDF: {ex.Message}");
+        }
+    }
+
     [HttpPost("{id}/assign-items")]
+    [Audit("Assign Items to Voyage")]
     public async Task<IActionResult> AssignItems(string id, [FromBody] VoyageAssignmentRequest request)
     {
         await _repository.AssignItemsToVoyageAsync(id, request.ItemIds);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Assign Items to Voyage",
-            true,
-            "Voyages",
-            $"Voyage: {id}, Items: {string.Join(",", request.ItemIds)}"
-        );
-
         return Ok(new { Success = true });
     }
 
     [HttpPost("{id}/unassign-items")]
+    [Audit("Unassign Items from Voyage")]
     public async Task<IActionResult> UnassignItems(string id, [FromBody] VoyageAssignmentRequest request)
     {
         await _repository.UnassignItemsFromVoyageAsync(id, request.ItemIds);
-        
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Unassign Items from Voyage",
-            true,
-            "Voyages",
-            $"Voyage: {id}, Items: {string.Join(",", request.ItemIds)}"
-        );
-
         return Ok(new { Success = true });
     }
 
     [HttpPost("optimize")]
+    [Audit("Optimize Voyages")]
     public async Task<ActionResult<IEnumerable<VoyageCandidate>>> Optimize()
     {
         var vessels = (await _vesselRepository.GetVesselsAsync()).ToList();
@@ -182,14 +171,6 @@ public class VoyagesController : ControllerBase
             vessels,
             locations,
             existingVoyages
-        );
-
-        await _auditService.LogAsync(
-            User.Identity?.Name ?? "Unknown",
-            "Optimize Voyages",
-            true,
-            "Voyages",
-            $"Generated {recommendations.Count} recommendations"
         );
 
         return Ok(recommendations);

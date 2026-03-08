@@ -4,7 +4,6 @@ namespace Klarity.Api.Models;
 
 public class MovementRequest
 {
-    [Required]
     public string RequestId { get; set; } = string.Empty;
     public DateTime? RequestDate { get; set; }
     
@@ -48,6 +47,7 @@ public class MovementRequest
     public string? Lifting { get; set; }
     
     public string? BusinessUnitId { get; set; }
+    public string? BusinessUnitName { get; set; }
     
     public string? CostCentre { get; set; }
     
@@ -73,6 +73,8 @@ public class MovementRequest
     public DateTime? ScheduledArrival { get; set; }
     public DateTime? ReturnScheduledDeparture { get; set; }
     public DateTime? ReturnScheduledArrival { get; set; }
+    public string? VesselName { get; set; }
+    public string TransportationMode { get; set; } = "Marine";
 
     public List<MovementRequestItem> Items { get; set; } = new();
 }
@@ -136,8 +138,8 @@ public class CostCentreOption
 
 public class MovementRequestItem
 {
-    [Required]
     public string ItemId { get; set; } = string.Empty;
+    public string RequestId { get; set; } = string.Empty;
     
     [Required]
     public string CategoryId { get; set; } = string.Empty;
@@ -161,4 +163,5 @@ public class MovementRequestItem
     public string? Status { get; set; }
     public bool IsHazardous { get; set; }
     public string? ItemTypeName { get; set; }
+    public string? ContainerId { get; set; }
 }

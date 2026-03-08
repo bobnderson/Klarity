@@ -62,7 +62,7 @@ export const getVoyageStatusStyle = (status: string): StatusStyle => {
       return { color: "error", label: status };
     case "enroute":
     case "en route":
-      return { color: "success", label: "En Route" };
+      return { color: "success", label: "Enroute" };
     case "scheduled":
       return { color: "info", label: "Scheduled" };
     default:

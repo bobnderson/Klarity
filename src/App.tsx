@@ -14,11 +14,14 @@ import { CargoManifestPage } from "./pages/CargoManifestPage";
 import { AviationDashboardPage } from "./pages/AviationDashboardPage";
 import { VesselSchedulingPage } from "./pages/VesselSchedulingPage";
 import { SmtpSettings } from "./pages/SmtpSettings";
+import { NotificationTemplatesPage } from "./pages/NotificationTemplatesPage";
 import { AviationPlanner } from "./pages/AviationPlanner";
 import { HelicopterRequestPage } from "./pages/HelicopterRequestPage";
 import { UsersPage } from "./pages/UsersPage";
 import { RolesPage } from "./pages/RolesPage";
 import AviationApprovalPage from "./pages/Aviation/AviationApprovalPage";
+import { ApprovalDashboardPage } from "./pages/ApprovalDashboardPage";
+import { MarineApprovalPage } from "./pages/MarineApprovalPage";
 import FlightSchedulePage from "./pages/FlightSchedulePage";
 import { Topbar } from "./components/common/Topbar";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
@@ -134,8 +137,20 @@ function AppContent() {
                       />
                       <Route path="/settings-smtp" element={<SmtpSettings />} />
                       <Route
+                        path="/settings-notifications"
+                        element={<NotificationTemplatesPage />}
+                      />
+                      <Route
                         path="/approve-aviation/:requestId"
                         element={<AviationApprovalPage />}
+                      />
+                      <Route
+                        path="/approval-dashboard"
+                        element={<ApprovalDashboardPage />}
+                      />
+                      <Route
+                        path="/approve-marine/:requestId"
+                        element={<MarineApprovalPage />}
                       />
                     </Routes>
                   </>
